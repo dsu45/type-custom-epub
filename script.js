@@ -29,14 +29,15 @@ document.addEventListener('DOMContentLoaded', () => {
     let chapterLengths = []; // Array of chapter lengths
     let bookLengthCalculated = false; // <<< Flag for caching
     let initialCharIndexToLoad = 0; // Dedicated var for loading progress
-    // Chunking State
-    const CHUNK_SIZE = 6; // Number of paragraphs per chunk
     let chapterChunks = []; // Array of paragraph arrays [[p1, p2,...], [p7, p8,...]]
     let currentChunkIndex = 0;
     let currentChunkText = ""; // The text content of the current chunk
     let currentTypedIndexInChunk = 0; // Typing index WITHIN the current chunk
     let chunkStartIndexInChapter = 0; // Character index where the current chunk starts in the ORIGINAL chapter text
 
+    // Chunking State
+    const CHUNK_SIZE = 6; // Number of paragraphs per chunk
+    
     const LAST_OPENED_KEY = 'epubTyperLastOpenedFile';
     const PROGRESS_KEY_PREFIX = 'epubTyperProgress_'; // Includes progress AND cached length data
 
@@ -264,17 +265,17 @@ document.addEventListener('DOMContentLoaded', () => {
         console.log(`loadChapter(${chapterIndex}): Function called.`);
         // Basic validation checks...
         if (!spineItems || spineItems.length === 0 || isLoading || chapterIndex < 0 || chapterIndex >= spineItems.length) {
-        let reason = `chapterIndex=${chapterIndex}, spineLength=${spineItems?.length ?? 'N/A'}`;
-        if (isLoading) reason += `, isLoading=true`;
-        if (!spineItems || spineItems.length === 0) reason += `, no spineItems`;
-        if (chapterIndex < 0) reason += `, chapterIndex < 0`;
-        if (spineItems && chapterIndex >= spineItems.length) reason += `, chapterIndex >= spineLength`;
-        console.warn(`loadChapter: Aborted entry validation. Reason(s): ${reason}`);
-        if(isLoading) setLoadingState(false); // Turn off loading if aborting due to it
+           let reason = `chapterIndex=${chapterIndex}, spineLength=${spineItems?.length ?? 'N/A'}`;
+           if (isLoading) reason += `, isLoading=true`;
+           if (!spineItems || spineItems.length === 0) reason += `, no spineItems`;
+           if (chapterIndex < 0) reason += `, chapterIndex < 0`;
+           if (spineItems && chapterIndex >= spineItems.length) reason += `, chapterIndex >= spineLength`;
+           console.warn(`loadChapter: Aborted entry validation. Reason(s): ${reason}`);
+           if(isLoading) setLoadingState(false); // Turn off loading if aborting due to it
             if (!spineItems || spineItems.length === 0) { // Also show error if spine missing
-                sourceTextArea.innerHTML = "<p style='color: red;'>Cannot load chapter: EPUB data missing.</p>";
+                 sourceTextArea.innerHTML = "<p style='color: red;'>Cannot load chapter: EPUB data missing.</p>";
             }
-        return;
+           return;
         }
 
         console.log(`loadChapter(${chapterIndex}): Passed entry validation. Setting isLoading = true.`);
@@ -301,15 +302,15 @@ document.addEventListener('DOMContentLoaded', () => {
                         const progressData = JSON.parse(savedData);
                         // Check if chapter progress exists for this specific chapter
                         if (progressData.chapterProgress && typeof progressData.chapterProgress === 'object') {
-                            const savedValue = progressData.chapterProgress[String(chapterIndex)]; // Use string key
-                            if (typeof savedValue === 'number' && savedValue >= 0) {
-                                overallSavedCharIndex = savedValue;
-                                console.log(`loadChapter(${chapterIndex}): Found overall saved progress index from localStorage: ${overallSavedCharIndex}`);
-                            } else {
-                                console.log(`loadChapter(${chapterIndex}): No saved progress found for THIS chapter in localStorage.`);
-                            }
+                             const savedValue = progressData.chapterProgress[String(chapterIndex)]; // Use string key
+                             if (typeof savedValue === 'number' && savedValue >= 0) {
+                                 overallSavedCharIndex = savedValue;
+                                 console.log(`loadChapter(${chapterIndex}): Found overall saved progress index from localStorage: ${overallSavedCharIndex}`);
+                             } else {
+                                 console.log(`loadChapter(${chapterIndex}): No saved progress found for THIS chapter in localStorage.`);
+                             }
                         } else {
-                            console.log(`loadChapter(${chapterIndex}): chapterProgress map missing in localStorage data.`);
+                             console.log(`loadChapter(${chapterIndex}): chapterProgress map missing in localStorage data.`);
                         }
                     } catch (e) {
                         console.error(`loadChapter(${chapterIndex}): Error parsing localStorage data:`, e);
@@ -319,26 +320,26 @@ document.addEventListener('DOMContentLoaded', () => {
                     console.log(`loadChapter(${chapterIndex}): No saved progress found for file ${currentFilename} in localStorage.`);
                 }
             } else {
-                console.log(`loadChapter(${chapterIndex}): No currentFilename set, cannot load progress.`);
+                 console.log(`loadChapter(${chapterIndex}): No currentFilename set, cannot load progress.`);
             }
             // --- End Retrieve starting index ---
 
 
             const section = spineItems[currentChapterIndex];
-            if (!section || typeof section.load !== 'function') {
-                throw new Error(`Invalid spine section at index ${currentChapterIndex}.`);
-            }
+             if (!section || typeof section.load !== 'function') {
+                 throw new Error(`Invalid spine section at index ${currentChapterIndex}.`);
+             }
 
             // --- Load section content & Normalize (remains the same) ---
             const contents = await section.load(book.load.bind(book));
-            console.log(`loadChapter(${chapterIndex}): Section content loaded.`);
+             console.log(`loadChapter(${chapterIndex}): Section content loaded.`);
             let bodyContent = '';
-            if (contents instanceof Document || contents instanceof Node) {
-                const bodyElement = contents.querySelector('body');
-                bodyContent = bodyElement ? bodyElement.innerHTML : contents.textContent || '';
-            } else if (typeof contents === 'string') {
-                bodyContent = contents;
-            }
+             if (contents instanceof Document || contents instanceof Node) {
+                 const bodyElement = contents.querySelector('body');
+                 bodyContent = bodyElement ? bodyElement.innerHTML : contents.textContent || '';
+             } else if (typeof contents === 'string') {
+                 bodyContent = contents;
+             }
 
             let processedHtml = bodyContent
                 .replace(/<\/p>/gi, '\n\n')
@@ -360,7 +361,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 .replace(/—/g, '-') // Em dash
                 .replace(/[“”]/g, '"') // Smart quotes
                 .replace(/[‘’]/g, "'") // Smart quotes
-                .replace(/©/g, 'c') // <<< ADDED: Replace copyright symbol
+                .replace(/©/g, 'c') // Copyright symbol
                 .replace(/\s+/g, ' ') // Collapse multiple spaces
                 .replace(new RegExp(`${P_BREAK_PLACEHOLDER}\\s+`, 'g'), P_BREAK_PLACEHOLDER) // Space after break
                 .replace(new RegExp(`[${P_BREAK_PLACEHOLDER}\\s]+\\s*(\\d+\\.\\d+)`, 'g'), '$1') // Break/space before header
@@ -372,7 +373,6 @@ document.addEventListener('DOMContentLoaded', () => {
             console.log(`loadChapter(${chapterIndex}): Full chapter text processed. Length: ${currentChapterText.length} chars.`);
 
             // --- Optional: Validate/Update Chapter Length Cache ---
-            // (Logic remains the same as before)
             if (bookLengthCalculated && chapterLengths.length > chapterIndex) {
                 if ((chapterLengths[chapterIndex] || 0) !== currentChapterText.length) {
                     console.warn(`loadChapter: Updating chapter length cache for index ${chapterIndex}. Old: ${chapterLengths[chapterIndex]}, New: ${currentChapterText.length}.`);
@@ -383,19 +383,19 @@ document.addEventListener('DOMContentLoaded', () => {
                     const savedData = localStorage.getItem(key);
                     if(savedData) {
                         try {
-                        let progressData = JSON.parse(savedData);
-                        if(!progressData.bookLengthData) progressData.bookLengthData = {};
-                        progressData.bookLengthData.totalChars = totalBookCharacters;
-                        progressData.bookLengthData.chapLengths = chapterLengths;
-                        localStorage.setItem(key, JSON.stringify(progressData));
-                        console.log("Updated bookLengthData in localStorage");
+                           let progressData = JSON.parse(savedData);
+                           if(!progressData.bookLengthData) progressData.bookLengthData = {};
+                           progressData.bookLengthData.totalChars = totalBookCharacters;
+                           progressData.bookLengthData.chapLengths = chapterLengths;
+                           localStorage.setItem(key, JSON.stringify(progressData));
+                           console.log("Updated bookLengthData in localStorage");
                         } catch(e) { console.error("Failed to update bookLengthData in storage", e); }
                     }
                 }
             } else if (bookLengthCalculated) {
                 console.warn("Book length was calculated, but chapterLengths array seems inconsistent.");
             } else if (!bookLengthCalculated && spineItems.length > 0) {
-                console.log("loadChapter: Book length cache not loaded, length data might be inaccurate until calculated.");
+                 console.log("loadChapter: Book length cache not loaded, length data might be inaccurate until calculated.");
             }
             // --- End Chapter length caching/validation ---
 
@@ -405,91 +405,70 @@ document.addEventListener('DOMContentLoaded', () => {
             for (let i = 0; i < paragraphs.length; i += CHUNK_SIZE) {
                 chapterChunks.push(paragraphs.slice(i, i + CHUNK_SIZE));
             }
-            if (chapterChunks.length === 0 && currentChapterText.length > 0) {
-                chapterChunks.push([currentChapterText]);
-                console.log("loadChapter: Chapter has text but no placeholders, treating as single chunk.");
-            } else if (chapterChunks.length === 0) {
-                console.log(`loadChapter: Chapter ${chapterIndex+1} appears empty after chunking.`);
-            }
+             if (chapterChunks.length === 0 && currentChapterText.length > 0) {
+                 chapterChunks.push([currentChapterText]);
+                 console.log("loadChapter: Chapter has text but no placeholders, treating as single chunk.");
+             } else if (chapterChunks.length === 0) {
+                  console.log(`loadChapter: Chapter ${chapterIndex+1} appears empty after chunking.`);
+             }
             console.log(`loadChapter: Chapter split into ${chapterChunks.length} chunk(s) of ~${CHUNK_SIZE} paragraphs.`);
             // --- End Chunk Creation ---
 
 
-            // --- Determine Initial Chunk and Index within Chunk (Remains the same logic) ---
+            // --- Determine Initial Chunk (Index only) ---
+            // Offset calculation is now done inside loadChunk based on latest localStorage
             let initialChunkIndex = 0;
-            let charIndexOffsetInChunk = 0;
-
             if (overallSavedCharIndex > 0 && chapterChunks.length > 0) {
-                let charCount = 0;
-                let foundChunk = false;
-                for (let i = 0; i < chapterChunks.length; i++) {
-                    const chunkParas = chapterChunks[i];
-                    let currentChunkLength = 0;
-                    if (chunkParas && chunkParas.length > 0) {
-                        currentChunkLength = chunkParas[0].length;
-                        for (let j = 1; j < chunkParas.length; j++) { currentChunkLength += 1 + chunkParas[j].length; }
-                    }
+                 let charCount = 0;
+                 for (let i = 0; i < chapterChunks.length; i++) {
+                     const chunkParas = chapterChunks[i];
+                     let currentChunkLength = 0;
+                     if (chunkParas && chunkParas.length > 0) {
+                         currentChunkLength = chunkParas[0].length;
+                         for (let j = 1; j < chunkParas.length; j++) { currentChunkLength += 1 + chunkParas[j].length; }
+                     }
 
-                    if (overallSavedCharIndex >= charCount && overallSavedCharIndex < charCount + currentChunkLength) {
-                        initialChunkIndex = i;
-                        charIndexOffsetInChunk = overallSavedCharIndex - charCount;
-                        foundChunk = true; break;
-                    }
-                    else if (overallSavedCharIndex === charCount + currentChunkLength + 1 && i < chapterChunks.length - 1) {
-                        initialChunkIndex = i + 1;
-                        charIndexOffsetInChunk = 0;
-                        foundChunk = true; break;
-                    }
-                    else if (overallSavedCharIndex === charCount + currentChunkLength) {
-                        initialChunkIndex = i;
-                        charIndexOffsetInChunk = currentChunkLength;
-                        foundChunk = true; break;
-                    }
-                    charCount += currentChunkLength + 1;
-                }
+                     // If saved index is BEFORE the end of this chunk OR exactly at the end
+                     if (overallSavedCharIndex <= charCount + currentChunkLength) {
+                         initialChunkIndex = i;
+                         break; // Found the chunk where the saved index falls
+                     }
+                      // Check if saved index is exactly at the start of the NEXT chunk
+                      else if (overallSavedCharIndex === charCount + currentChunkLength + 1 && i < chapterChunks.length - 1) {
+                         initialChunkIndex = i + 1;
+                         break; // Start at the beginning of the next chunk
+                      }
 
-                if (!foundChunk) {
-                    console.warn(`Saved index ${overallSavedCharIndex} seems beyond chapter end. Loading last chunk at end.`);
-                    initialChunkIndex = chapterChunks.length - 1;
-                    charCount = 0;
-                    for (let i=0; i<initialChunkIndex; i++) { /* Recalculate charCount */
-                        const chunkParas = chapterChunks[i];
-                        if (chunkParas && chunkParas.length > 0) {
-                            let prevChunkLen = chunkParas[0].length;
-                            for(let j=1; j<chunkParas.length; j++) { prevChunkLen += 1 + chunkParas[j].length; }
-                            charCount += prevChunkLen + 1;
-                        }
-                    }
-                    const lastChunkParas = chapterChunks[initialChunkIndex];
-                    let lastChunkLen = 0;
-                    if(lastChunkParas && lastChunkParas.length > 0) { /* Calculate lastChunkLen */
-                        lastChunkLen = lastChunkParas[0].length;
-                        for(let j=1; j<lastChunkParas.length; j++) { lastChunkLen += 1 + lastChunkParas[j].length; }
-                    }
-                    charIndexOffsetInChunk = lastChunkLen;
-                }
+                     charCount += currentChunkLength + 1; // Move to the start of the next potential chunk
+
+                      // If loop finishes, index is likely past the end, target last chunk
+                      if (i === chapterChunks.length - 1) {
+                           initialChunkIndex = i; // Target the last chunk
+                           console.warn(`Saved index ${overallSavedCharIndex} seems beyond chapter end. Loading last chunk.`);
+                      }
+                 }
             }
-            console.log(`loadChapter: Determined initial chunk: ${initialChunkIndex}, offset: ${charIndexOffsetInChunk}`);
+             console.log(`loadChapter: Determined initial chunk: ${initialChunkIndex}`);
             // --- End Initial Chunk Determination ---
 
-            // Load the determined chunk
-            loadChunk(initialChunkIndex, charIndexOffsetInChunk); // Pass offset
+            // Load the determined chunk - loadChunk will calculate the offset
+            loadChunk(initialChunkIndex); // No offset passed
 
             chapterSuccessfullyLoaded = true; // Chapter setup successful
 
-    } catch (err) {
-        console.error(`loadChapter(${chapterIndex}): Error during chapter setup:`, err);
-        sourceTextArea.innerHTML = `<p style="color: red;">Error loading chapter ${currentChapterIndex + 1}: ${err.message}</p>`;
-        chapterSuccessfullyLoaded = false;
+       } catch (err) {
+           console.error(`loadChapter(${chapterIndex}): Error during chapter setup:`, err);
+           sourceTextArea.innerHTML = `<p style="color: red;">Error loading chapter ${currentChapterIndex + 1}: ${err.message}</p>`;
+           chapterSuccessfullyLoaded = false;
             resetTypingStateForNewChapter(); // Reset global chapter stats
             updateNavigation();
             updateBookProgress();
-    } finally {
-        console.log(`loadChapter(${chapterIndex}): Chapter setup finished. Setting isLoading = false.`);
-        setLoadingState(false); // Ensure loading is off
+       } finally {
+           console.log(`loadChapter(${chapterIndex}): Chapter setup finished. Setting isLoading = false.`);
+           setLoadingState(false); // Ensure loading is off
             // Focusing is handled within loadChunk now
-    }
-    } // End loadChapter
+       }
+    } // End loadChapter    
 
 
 
@@ -1068,34 +1047,35 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // --- Calculate the OVERALL character index in the chapter ---
-        // Start with the base index where the current chunk begins
-        let overallChapterIndex = chunkStartIndexInChapter;
-        // Add the progress within the current chunk
-        overallChapterIndex += currentTypedIndexInChunk;
+        let overallChapterIndex = chunkStartIndexInChapter + currentTypedIndexInChunk;
 
-        // If the user is waiting for Enter/Space, the progress hasn't *passed* the break yet.
-        // The 'currentTypedIndexInChunk' might point *at* the placeholder index.
-        // We want to save the index *before* the break that requires action.
+        // Check if waiting for enter BEFORE the current index
+        let isWaitingForEnter = false;
         if (currentTypedIndexInChunk > 0) {
             const precedingSpan = document.getElementById(`chunk-char-${currentTypedIndexInChunk - 1}`);
-            if (precedingSpan?.classList.contains('needs-enter')) {
-                // If needs enter, save the index of the char *before* the break.
-                overallChapterIndex = chunkStartIndexInChapter + currentTypedIndexInChunk - 1;
-                 console.log("saveProgress: Adjusting save index due to needs-enter state.");
-            }
+            isWaitingForEnter = precedingSpan?.classList.contains('needs-enter') ?? false;
         }
+
+        if (isWaitingForEnter) {
+            // If waiting for enter, save the index of the char *before* the break.
+            overallChapterIndex = chunkStartIndexInChapter + currentTypedIndexInChunk - 1;
+            console.log("saveProgress: Adjusting save index due to needs-enter state.");
+        }
+        // NO adjustment needed if exactly at the end (index === length).
+        // Saving start + length correctly indicates completion up to the placeholder.
+        // The previous adjustment to point *after* the placeholder caused the inconsistency.
+
         // --- End Calculation ---
 
 
         // Update the overall character index for the CURRENT chapter
         progressData.chapterProgress[String(currentChapterIndex)] = overallChapterIndex;
-        // *** FIXED LOG MESSAGE ***
         console.log(`saveProgress: Updating chapter ${currentChapterIndex} to overall index ${overallChapterIndex}`);
 
         // Keep/Update existing book length data (logic remains same)
-        if (bookLengthCalculated && !progressData.bookLengthData) {
+        if (bookLengthCalculated && (!progressData.bookLengthData || progressData.bookLengthData.chapLengths?.length !== chapterLengths.length)) { // Also check length consistency
              progressData.bookLengthData = { totalChars: totalBookCharacters, chapLengths: chapterLengths };
-             console.log(`saveProgress: Adding bookLengthData.`);
+             console.log(`saveProgress: Adding/Updating bookLengthData.`);
         } else if (bookLengthCalculated && progressData.bookLengthData) {
              progressData.bookLengthData.totalChars = totalBookCharacters;
              progressData.bookLengthData.chapLengths = chapterLengths;
@@ -1214,107 +1194,134 @@ document.addEventListener('DOMContentLoaded', () => {
         textDisplayArea.scrollTo({ top: textDisplayArea.scrollHeight, behavior: 'auto' });
     }
 
-    function loadChunk(chunkIndex, initialOffset = 0) {
+          
+    // Removed the initialOffset parameter from the function definition
+          
+          
+    // ADD BACK initialOffset parameter, default to null
+    function loadChunk(chunkIndex, initialOffset = null) {
+        // --- Validation and Empty Chapter Handling ---
         if (chunkIndex < 0 || chunkIndex >= chapterChunks.length) {
-            // Handle edge cases like empty chapter resulting in no chunks
             if (chapterChunks.length === 0) {
                 console.log("loadChunk: No chunks available (chapter likely empty).");
-                currentChunkIndex = 0;
-                currentChunkText = "";
-                currentTypedIndexInChunk = 0;
-                chunkStartIndexInChapter = 0;
-                displayChunkText(); // Display empty state
-                updateNavigation(); // Update chapter nav potentially
-                // updateChunkNavigation(); // Update chunk nav if you add it
-                updateBookProgress(); // Update book progress
-                markChapterAsCompletedUI(); // Mark empty chapter as complete
-                return; // Exit
+                currentChunkIndex = 0; currentChunkText = ""; currentTypedIndexInChunk = 0; chunkStartIndexInChapter = 0;
+                displayChunkText(); updateNavigation(); updateBookProgress();
+                return;
             } else {
-                console.warn(`loadChunk: Invalid chunk index ${chunkIndex} requested. Clamping or ignoring.`);
-                // Optionally clamp or return, for now let's just log and potentially return
-                return; // Or clamp: chunkIndex = Math.max(0, Math.min(chunkIndex, chapterChunks.length - 1));
+                console.warn(`loadChunk: Invalid chunk index ${chunkIndex} requested.`);
+                return;
             }
         }
+        // --- End Validation ---
 
-        console.log(`loadChunk: Loading chunk ${chunkIndex} with initial offset ${initialOffset}`);
-        currentChunkIndex = chunkIndex;
+        console.log(`loadChunk: Loading chunk ${chunkIndex}. Received initialOffset: ${initialOffset}`);
+        currentChunkIndex = chunkIndex; // Update the global chunk index
 
-        // --- Calculate start index of this chunk in the original chapter text ---
+        // --- Calculate start index of THIS chunk (remains same) ---
         let calculatedStartIndex = 0;
         for (let i = 0; i < currentChunkIndex; i++) {
-            // Calculate length of previous chunks accurately
-             const chunkParas = chapterChunks[i];
-             if (chunkParas && chunkParas.length > 0) {
-                 let chunkLength = chunkParas[0].length; // First para
-                 for (let j = 1; j < chunkParas.length; j++) {
-                     chunkLength += 1 + chunkParas[j].length; // +1 for placeholder
-                 }
-                 calculatedStartIndex += chunkLength + 1; // +1 for placeholder separating chunks
-             }
+            const chunkParas = chapterChunks[i];
+            if (chunkParas && chunkParas.length > 0) {
+                let chunkLength = chunkParas[0].length;
+                for (let j = 1; j < chunkParas.length; j++) { chunkLength += 1 + chunkParas[j].length; }
+                calculatedStartIndex += chunkLength + 1;
+            }
         }
         chunkStartIndexInChapter = calculatedStartIndex;
-        console.log(`loadChunk: Calculated chunk start index in chapter: ${chunkStartIndexInChapter}`);
+        console.log(`loadChunk: Calculated start index for chunk ${chunkIndex} in chapter: ${chunkStartIndexInChapter}`);
         // --- End Calculate start index ---
 
         // Join paragraphs for the current chunk
         const currentParas = chapterChunks[currentChunkIndex];
-        // Join with placeholder, but DON'T add one at the very end
         currentChunkText = currentParas.join(P_BREAK_PLACEHOLDER);
-
         console.log(`loadChunk: Chunk text length: ${currentChunkText.length}`);
 
-        // --- Set initial typing position within the chunk ---
-        // Clamp the offset to be within the chunk's bounds [0, length]
-        currentTypedIndexInChunk = Math.max(0, Math.min(initialOffset, currentChunkText.length));
+
+        // --- Calculate or Use Initial Typing Position ---
+        let targetOffsetInChunk;
+
+        // Check if a specific offset was passed (e.g., 0 from backward arrow nav)
+        if (typeof initialOffset === 'number') {
+            targetOffsetInChunk = initialOffset;
+            console.log(`loadChunk: Using explicitly passed initialOffset: ${targetOffsetInChunk}`);
+        } else {
+            // No explicit offset passed, calculate based on localStorage progress
+            let overallSavedCharIndex = 0;
+            if (currentFilename) {
+                const key = PROGRESS_KEY_PREFIX + currentFilename;
+                const savedData = localStorage.getItem(key);
+                if (savedData) {
+                    try {
+                        const progressData = JSON.parse(savedData);
+                        if (progressData.chapterProgress && typeof progressData.chapterProgress === 'object') {
+                            const savedValue = progressData.chapterProgress[String(currentChapterIndex)];
+                            if (typeof savedValue === 'number' && savedValue >= 0) {
+                                overallSavedCharIndex = savedValue;
+                            }
+                        }
+                    } catch (e) { console.error("loadChunk: Error parsing localStorage data for offset calculation", e); }
+                }
+            }
+            console.log(`loadChunk: Read overall chapter progress index: ${overallSavedCharIndex} to calculate offset.`);
+            targetOffsetInChunk = Math.max(0, overallSavedCharIndex - chunkStartIndexInChapter);
+        }
+
+        // Clamp the final offset
+        targetOffsetInChunk = Math.min(targetOffsetInChunk, currentChunkText.length);
+        currentTypedIndexInChunk = targetOffsetInChunk;
         console.log(`loadChunk: Setting currentTypedIndexInChunk to ${currentTypedIndexInChunk}`);
+        // --- End Set Initial Position ---
 
-        // Reset typing stats for the new chunk (errors, timer maybe?)
-        resetTypingStateForNewChunk(); // New function needed
 
-        // Display the chunk text
-        displayChunkText(); // Modified display function
+        resetTypingStateForNewChunk();
+        displayChunkText();
 
-        // --- Restore Visual State for the loaded chunk ---
+        // --- Restore Visual State ---
         console.log(`loadChunk: Restoring visual state up to index ${currentTypedIndexInChunk} in chunk.`);
-        for (let i = 0; i < currentTypedIndexInChunk; i++) {
+        for (let i = 0; i < currentTypedIndexInChunk; i++) { /* ... */
             if (currentChunkText[i] !== P_BREAK_PLACEHOLDER) {
-                const charSpan = document.getElementById(`chunk-char-${i}`); // Use new ID prefix
+                const charSpan = document.getElementById(`chunk-char-${i}`);
                 if (charSpan) {
                     charSpan.classList.remove('incorrect', 'current', 'needs-enter');
                     charSpan.classList.add('correct');
                 }
             }
         }
-         // Check if the character *just before* the current index requires 'needs-enter'
-         if (currentTypedIndexInChunk > 0 && currentTypedIndexInChunk <= currentChunkText.length) {
-             const nextCharIsBreak = currentChunkText[currentTypedIndexInChunk] === P_BREAK_PLACEHOLDER;
-             // Need to check the character *before* the potential break
-             const prevCharIndex = currentTypedIndexInChunk - 1;
-             if (nextCharIsBreak && prevCharIndex >= 0) {
-                 const prevCharSpan = document.getElementById(`chunk-char-${prevCharIndex}`);
-                 if (prevCharSpan) {
-                     prevCharSpan.classList.add('needs-enter');
-                     console.log(`loadChunk: Restored needs-enter state for chunk index ${prevCharIndex}`);
-                 }
-             }
-         }
+        // Restore 'needs-enter' state
+        if (currentTypedIndexInChunk > 0 && currentTypedIndexInChunk < currentChunkText.length) {
+            const charAtCursor = currentChunkText[currentTypedIndexInChunk];
+            if (charAtCursor === P_BREAK_PLACEHOLDER) {
+                const prevCharIndex = currentTypedIndexInChunk - 1;
+                const prevCharSpan = document.getElementById(`chunk-char-${prevCharIndex}`);
+                if (prevCharSpan) {
+                    prevCharSpan.classList.add('needs-enter');
+                    console.log(`loadChunk: Restored needs-enter state for chunk index ${prevCharIndex}`);
+                }
+            }
+        }
         // --- End Restore Visual State ---
 
         // --- Update UI ---
-        updateStats(); // Update WPM/Acc (will reset)
-        updateNavigation(); // Update chapter Prev/Next buttons
-        // updateChunkNavigation(); // TODO: Add specific chunk nav UI if desired
-        updateBookProgress(); // Reflects progress based on current chunk/pos
-        updateCursor(); // Position cursor within the chunk
+        updateStats();
+        updateNavigation();
+        updateBookProgress();
+        updateCursor();
 
-        // Focus input if there's text to type
+        // Focus input
         if (currentTypedIndexInChunk < currentChunkText.length) {
-             try { hiddenInput.focus(); } catch(e) { console.warn("Focus failed", e); }
+            try { hiddenInput.focus(); } catch(e) { console.warn("Focus failed", e); }
         } else {
-             console.log("loadChunk: Chunk loaded at completed state.");
-             // Potentially check if it's the last chunk and auto-advance chapter? (Handled in handleKeyDown now)
+            console.log("loadChunk: Chunk loaded at completed state.");
         }
-    }
+    } // End loadChunk
+
+
+
+
+
+
+
+
     function resetTypingStateForNewChunk() {
         // Reset stats relevant to a typing session within a chunk
         errors = 0;
@@ -1360,40 +1367,47 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const newChunkIndex = currentChunkIndex + direction;
 
-        // --- Check for Chapter Boundaries ---
-        if (direction === 1) { // Right Arrow
-            // Check if we are on the LAST chunk AND at/past the end of its text
-            if (currentChunkIndex >= chapterChunks.length - 1 &&
-                currentTypedIndexInChunk >= currentChunkText.length)
-            {
-                console.log("navigateChunk: At end of last chunk, attempting to navigate to next chapter.");
-                navigateChapter(1); // Call the function to move to the next chapter
-                return; // Stop further processing in this function
+        // --- Check for Chapter/Completion Boundaries ---
+        if (direction === 1) { // === Trying to go FORWARD ===
+            let isChunkComplete = currentTypedIndexInChunk >= currentChunkText.length;
+            let isWaitingForEnter = false;
+            if (currentTypedIndexInChunk > 0) {
+                 const lastCharSpan = document.getElementById(`chunk-char-${currentTypedIndexInChunk - 1}`);
+                 isWaitingForEnter = lastCharSpan?.classList.contains('needs-enter') ?? false;
             }
-        } else if (direction === -1) { // Left Arrow
-            // Check if we are on the FIRST chunk
+            if (!isChunkComplete || isWaitingForEnter) {
+                 console.log("navigateChunk: Cannot navigate forward, current chunk not complete.");
+                 return; // Block forward navigation
+            }
+            // Check chapter boundary AFTER completion check
+            if (newChunkIndex >= chapterChunks.length) {
+                 console.log("navigateChunk: At end of last chunk, attempting to navigate to next chapter.");
+                 navigateChapter(1);
+                 return;
+            }
+        } else if (direction === -1) { // === Trying to go BACKWARD ===
             if (currentChunkIndex <= 0) {
-                 // Optional Check: only navigate if at the very beginning of the first chunk?
-                 // if (currentTypedIndexInChunk === 0) {
-                    console.log("navigateChunk: At start of first chunk, attempting to navigate to previous chapter.");
-                    navigateChapter(-1); // Call the function to move to the previous chapter
-                    return; // Stop further processing
-                 // }
+                console.log("navigateChunk: At start of first chunk, attempting to navigate to previous chapter.");
+                navigateChapter(-1);
+                return;
             }
         }
-        // --- End Chapter Boundary Check ---
+        // --- End Boundary Check ---
 
 
         // --- Normal Chunk Navigation (within the same chapter) ---
         if (newChunkIndex >= 0 && newChunkIndex < chapterChunks.length) {
             console.log(`Navigating chunk from ${currentChunkIndex} to ${newChunkIndex}`);
-            // Save progress for the chunk we are leaving (based on its state)
-            saveProgress();
-            // Load the new chunk (start at beginning for arrow nav)
-            loadChunk(newChunkIndex, 0);
+            saveProgress(); // Save state of chunk we are leaving
+
+            // *** Pass explicit offset 0 ONLY when going backward ***
+            if (direction === -1) {
+                loadChunk(newChunkIndex, 0); // Load previous chunk at its start
+            } else {
+                loadChunk(newChunkIndex); // Load next chunk, let it calculate offset from saved progress
+            }
         } else {
              console.log(`Chunk navigation blocked: Index ${newChunkIndex} out of bounds [0, ${chapterChunks.length - 1}]`);
-             // Optionally flash UI or provide feedback
         }
     }
 
