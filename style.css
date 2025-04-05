@@ -246,25 +246,6 @@ h1 { /* Removed from HTML, hide if re-added */
     /* user-select: none; */
 }
 
-/* Needs Enter Cue using ::after */
-#source-text span[id^="chunk-char-"].needs-enter::after {
-    /* Using Return Symbol (U+23CE) */
-    content: ' \21B2'; /* Space + CSS Unicode Escape for Return Symbol */
-    display: inline-block;
-    position: absolute;
-    left: 100%;
-    top: 50%;
-    transform: translateY(-50%);
-    margin-left: 2px; /* Space after character */
-    color: var(--needs-enter-cue-color);
-    font-size: 0.8em; /* Relative size */
-    font-weight: bold;
-    line-height: 1; /* Prevent affecting parent line height */
-    user-select: none; -webkit-user-select: none; -moz-user-select: none;
-    pointer-events: none; /* Prevent interaction */
-    /* animation: fadeIn 0.2s ease-in; */ /* Optional fade */
-}
-
 /* Span State Styles */
 #source-text span[id^="chunk-char-"].correct {
     color: var(--fg-color); /* Typed text color */
@@ -285,20 +266,29 @@ h1 { /* Removed from HTML, hide if re-added */
 
 /* Needs Enter Cue using ::after */
 #source-text span[id^="chunk-char-"].needs-enter::after {
-    content: ' \u2190'; /* Space + Left Arrow */
+    /* Using Carriage Return Symbol (U+21B5) */
+    content: ' \21B5'; /* Space + CSS Unicode Escape for Carriage Return Symbol */
     display: inline-block;
-    position: absolute;
-    left: 100%;
-    top: 50%;
-    transform: translateY(-50%);
-    margin-left: 2px; /* Space after character */
+    position: relative; /* Use relative for simple flow */
+    /* Reset absolute positioning */
+    /* left: auto; top: auto; transform: none; */
+    margin-left: 3px; /* Space after character */
     color: var(--needs-enter-cue-color);
-    font-size: 0.8em; /* Relative size */
-    font-weight: bold;
+    font-size: 0.9em; /* <<< INCREASED from 0.8em */
+    font-weight: bold; /* <<< ENSURED bold */
     line-height: 1; /* Prevent affecting parent line height */
+    vertical-align: baseline; /* Adjust if needed */
     user-select: none; -webkit-user-select: none; -moz-user-select: none;
     pointer-events: none; /* Prevent interaction */
-    /* animation: fadeIn 0.2s ease-in; */ /* Optional fade */
+    opacity: 0.9; /* Optional */
+}
+
+/* Style for error state */
+#source-text span[id^="chunk-char-"].needs-enter.incorrect::after {
+     color: var(--needs-enter-cue-color);
+     /* Optionally make red on error */
+     /* color: var(--red-color); */
+     /* opacity: 1; */
 }
 
 /* Ensure cue remains visible even if char is incorrect */

@@ -517,10 +517,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // handleKeyDown remains largely the same as the previous version
     // (with Ctrl+Backspace, regular backspace, character typing logic)
           
-          
-          
-          
-          
     function handleKeyDown(event) {
         // Initial checks (loading, chunk loaded?)
         if (isLoading || currentChunkText == null) { // Check currentChunkText
@@ -529,24 +525,44 @@ document.addEventListener('DOMContentLoaded', () => {
          }
 
         const key = event.key;
+        const isCtrlBackspace = event.ctrlKey && key === 'Backspace';
 
-        // --- Arrow Key Chunk Navigation ---
-        if (key === 'ArrowLeft') {
+        // --- Arrow Key Chunk Navigation (Handle First - Always Allowed) ---
+        if (key === 'ArrowLeft' || key === 'ArrowRight') {
             event.preventDefault();
-            navigateChunk(-1);
-            return;
-        }
-        if (key === 'ArrowRight') {
-            event.preventDefault();
-            navigateChunk(1);
+            navigateChunk(key === 'ArrowRight' ? 1 : -1);
             return;
         }
         // --- End Arrow Key Navigation ---
 
+        // --- Check if current chunk is loaded as complete/read-only ---
+        const isChunkReadOnly = sourceTextArea.dataset.readonly === 'true';
 
-        // Allow backspace even if technically "finished" with the chunk
+        // --- Block ALL Editing Keys if Read-Only ---
+        if (isChunkReadOnly) {
+            // Allow navigation/utility keys even if read-only
+            const allowedReadOnlyKeys = ['Home', 'End', 'PageUp', 'PageDown', 'Tab', 'Shift', 'Control', 'Alt', 'Meta', 'CapsLock', 'Escape'];
+            if (!allowedReadOnlyKeys.includes(key)) {
+                // Block all other keys (letters, numbers, symbols, space, enter, backspace)
+                console.log(`Key [${key}] blocked: Chunk is loaded as complete/read-only.`);
+                event.preventDefault(); // Prevent default action
+                return; // Block the key press entirely
+            }
+             // If it's an allowed non-editing key, let it pass through OS/browser
+             else {
+                 console.log(`Allowing non-editing key [${key}] on read-only chunk.`);
+                 // Allow default browser behavior for these keys if needed,
+                 // but we don't need further processing in this function.
+                 // Returning here prevents hitting the preventDefault for Space/Enter later.
+                 return;
+             }
+        }
+        // --- End Read-only Check ---
+
+        // --- If NOT Read-Only, proceed with normal typing logic ---
+
+        // Allow backspace even if technically "finished" (for needs-enter cleanup)
         if (currentTypedIndexInChunk >= currentChunkText.length && key !== 'Backspace') {
-             // Allow Enter/Space if the very last character needs enter
              let lastCharNeedsEnter = false;
              if (currentTypedIndexInChunk > 0) {
                  const lastSpan = document.getElementById(`chunk-char-${currentTypedIndexInChunk - 1}`);
@@ -558,60 +574,58 @@ document.addEventListener('DOMContentLoaded', () => {
              }
         }
 
-        const isCtrlBackspace = event.ctrlKey && key === 'Backspace';
 
-        // --- Prevent Default Actions ---
+        // --- Prevent Default Actions for Space/Backspace/Enter (if not read-only) ---
         if (key === ' ' || key === 'Backspace' || key === 'Enter') {
             event.preventDefault();
         }
 
-        // Ignore other non-typing keys
+        // Ignore other non-typing keys that weren't explicitly allowed above or handled below
         if (key.length > 1 && key !== 'Backspace' && key !== 'Enter' && !isCtrlBackspace) {
-             console.log("handleKeyDown ignored: Non-typing helper key:", key);
-             return;
+            console.log("handleKeyDown ignored: Non-typing helper key:", key);
+            return;
         }
 
-        // --- Handle Backspace (operates on chunk) ---
+        // --- Handle Backspace (operates on chunk - only runs if NOT read-only) ---
         if (key === 'Backspace') {
-            event.preventDefault();
+            // No need for redundant read-only check here now due to the top-level check
+
+            let performSave = false; // Flag to save only if index actually changes
 
             if (isCtrlBackspace) {
-                // Ctrl+Backspace Logic (simplified for chunk context)
-                if (currentTypedIndexInChunk === 0) return;
-                const originalIndex = currentTypedIndexInChunk;
-                let targetIndex = currentTypedIndexInChunk - 1;
-                // Skip trailing spaces (placeholders are handled by needs-enter logic)
-                while (targetIndex >= 0 && /\s/.test(currentChunkText[targetIndex])) { targetIndex--; }
-                // Find start of word
-                while (targetIndex >= 0 && !/\s/.test(currentChunkText[targetIndex]) && currentChunkText[targetIndex] !== P_BREAK_PLACEHOLDER) { targetIndex--; }
-                const newIndex = targetIndex + 1;
+                if (currentTypedIndexInChunk > 0) { // Only if not at start
+                    const originalIndex = currentTypedIndexInChunk;
+                    let targetIndex = currentTypedIndexInChunk - 1;
+                    // Skip trailing spaces
+                    while (targetIndex >= 0 && /\s/.test(currentChunkText[targetIndex])) { targetIndex--; }
+                    // Find start of word (or placeholder)
+                    while (targetIndex >= 0 && !/\s/.test(currentChunkText[targetIndex]) && currentChunkText[targetIndex] !== P_BREAK_PLACEHOLDER) { targetIndex--; }
+                    const newIndex = targetIndex + 1; // Land after the space/placeholder/start
 
-                // Clear styles between newIndex and originalIndex
-                for (let i = newIndex; i < originalIndex; i++) {
-                    if (currentChunkText[i] === P_BREAK_PLACEHOLDER) continue;
-                    const charSpan = document.getElementById(`chunk-char-${i}`); // Use chunk ID
-                    if (charSpan) {
-                        if (charSpan.classList.contains('incorrect')) { errors = Math.max(0, errors - 1); }
-                        charSpan.classList.remove('correct', 'incorrect', 'current', 'needs-enter');
+                    if (newIndex < originalIndex) { // Check if index changed
+                        for (let i = newIndex; i < originalIndex; i++) {
+                             if (currentChunkText[i] === P_BREAK_PLACEHOLDER) continue;
+                             const charSpan = document.getElementById(`chunk-char-${i}`);
+                             if (charSpan) {
+                                 if (charSpan.classList.contains('incorrect')) { errors = Math.max(0, errors - 1); }
+                                 charSpan.classList.remove('correct', 'incorrect', 'current', 'needs-enter');
+                             }
+                         }
+                        currentTypedIndexInChunk = newIndex;
+                        performSave = true; // Index changed, need to save
                     }
                 }
-                currentTypedIndexInChunk = newIndex;
-
-            } else {
-                // Regular Backspace Logic
+            } else { // Regular Backspace
                 if (currentTypedIndexInChunk > 0) {
                      const indexToClear = currentTypedIndexInChunk - 1;
                      currentTypedIndexInChunk--; // Move index back first
 
-                    // Clear style of the character span we just backspaced *over*
-                    const charSpan = document.getElementById(`chunk-char-${indexToClear}`); // Use chunk ID
+                    const charSpan = document.getElementById(`chunk-char-${indexToClear}`);
                     if (charSpan) {
                         if (charSpan.classList.contains('incorrect')) { errors = Math.max(0, errors - 1); }
                         charSpan.classList.remove('correct', 'incorrect', 'current', 'needs-enter');
                         console.log(`Backspace cleared style from chunk index ${indexToClear}`);
                     }
-
-                    // Remove 'needs-enter' from the *new* preceding char if necessary
                      if(currentTypedIndexInChunk > 0) {
                           const newPrecedingSpan = document.getElementById(`chunk-char-${currentTypedIndexInChunk - 1}`);
                           if (newPrecedingSpan?.classList.contains('needs-enter')) {
@@ -619,157 +633,98 @@ document.addEventListener('DOMContentLoaded', () => {
                                console.log(`Backspace removed needs-enter from chunk index ${currentTypedIndexInChunk - 1}`);
                           }
                      }
-
-
-                    // Reset timer if backspacing to the very beginning of the chunk
                     if (currentTypedIndexInChunk === 0 && totalTyped <= 1) {
-                         startTime = null;
-                         totalTyped = 0;
-                         console.log("Timer reset due to backspace to chunk start.");
+                         startTime = null; totalTyped = 0; console.log("Timer reset...");
                     }
+                    performSave = true; // Index changed, need to save
                 }
             }
 
-            // Update UI after backspace
+            // Update UI after any backspace action that occurred
             updateCursor();
             updateStats();
-            updateBookProgress(); // Recalculates overall progress
-            saveProgress(); // Saves overall chapter progress
-            return;
+            updateBookProgress();
+            if (performSave) {
+                saveProgress(); // Save ONLY if index actually changed
+            }
+            return; // Stop after handling backspace
         } // End Backspace Handling
 
 
-        // --- Handle Typing / Enter / Space Key (operates on chunk) ---
-
-        // Check if the character BEFORE the current index needs Enter/Space
+        // --- Handle Typing / Enter / Space Key (only runs if NOT read-only) ---
         let needsEnter = false;
         let precedingSpan = null;
         if (currentTypedIndexInChunk > 0) {
-            precedingSpan = document.getElementById(`chunk-char-${currentTypedIndexInChunk - 1}`); // Chunk ID
-            needsEnter = precedingSpan?.classList.contains('needs-enter') ?? false;
+             precedingSpan = document.getElementById(`chunk-char-${currentTypedIndexInChunk - 1}`);
+             needsEnter = precedingSpan?.classList.contains('needs-enter') ?? false;
         }
-
-        // Get expected character at the current cursor position within the chunk
         const expectedChar = (currentTypedIndexInChunk < currentChunkText.length) ? currentChunkText[currentTypedIndexInChunk] : null;
 
         // --- Case 1: NEEDS Enter/Space ---
         if (needsEnter) {
             if (key === 'Enter' || key === ' ') {
                 console.log(`Key '${key}' pressed correctly at needs-enter point after chunk index ${currentTypedIndexInChunk - 1}.`);
-                if (precedingSpan) {
-                    precedingSpan.classList.remove('incorrect', 'needs-enter');
-                    precedingSpan.classList.add('correct');
-                }
+                if (precedingSpan) { precedingSpan.classList.remove('incorrect', 'needs-enter'); precedingSpan.classList.add('correct'); }
                 if (!startTime && totalTyped === 0) startTime = new Date();
-
-                // --- ADDED: Skip subsequent placeholders ---
-                // We've conceptually handled the break before currentTypedIndexInChunk.
-                // Now, advance past any placeholder characters AT or immediately AFTER this index.
                 while (currentTypedIndexInChunk < currentChunkText.length && currentChunkText[currentTypedIndexInChunk] === P_BREAK_PLACEHOLDER) {
-                    console.log(`handleKeyDown: Skipping placeholder at chunk index ${currentTypedIndexInChunk} after correct Enter/Space.`);
+                     console.log(`handleKeyDown: Skipping placeholder at chunk index ${currentTypedIndexInChunk} after correct Enter/Space.`);
                     currentTypedIndexInChunk++;
                 }
-                // --- END ADDED ---
-
-                // Now currentTypedIndexInChunk points to the next non-placeholder character or the end.
-                updateCursor(); // This will now target the correct next character span.
-                updateStats();
-                updateBookProgress();
-                saveProgress(); // Save progress reflecting the cleared break AND skipped placeholders.
-                return; // ★★★ Stop processing here ★★★
-
-            } else { // Incorrect key at needs-enter
+                updateCursor(); updateStats(); updateBookProgress(); saveProgress();
+                return;
+            } else {
                 console.log(`Incorrect key '${key}' pressed at needs-enter point.`);
-                 if (precedingSpan && !precedingSpan.classList.contains('incorrect')) {
-                    errors++;
-                    precedingSpan.classList.add('incorrect');
-                    precedingSpan.classList.remove('correct');
-                    updateStats();
-                 }
-                 if (precedingSpan) precedingSpan.classList.add('needs-enter'); // Keep cue
-                 return; // DO NOT ADVANCE
+                 if (precedingSpan && !precedingSpan.classList.contains('incorrect')) { errors++; precedingSpan.classList.add('incorrect'); precedingSpan.classList.remove('correct'); updateStats(); }
+                 if (precedingSpan) precedingSpan.classList.add('needs-enter');
+                 return;
             }
-        } // --- End Case 1 ---
-
+        }
+        // --- End Case 1 ---
 
         // --- Case 2: Regular Typing ---
-        if (key === 'Enter') { // Ignore Enter if not needed
-            console.log("Enter ignored.");
-            return;
-        }
+        if (key === 'Enter') { console.log("Enter ignored."); return; }
+        if (expectedChar === null) { console.log("At end of chunk, ignoring non-backspace/nav keys."); return; }
+        if (expectedChar === P_BREAK_PLACEHOLDER) { console.error(`Logic Error: Attempting to type at placeholder chunk index ${currentTypedIndexInChunk}.`); return; }
 
-        if (expectedChar === null) { // At end of chunk text
-            console.log("At end of chunk, ignoring non-backspace/nav keys.");
-            return;
-        }
-
-        // This logic should not be reachable if needsEnter is true, but safeguard:
-        if (expectedChar === P_BREAK_PLACEHOLDER) {
-             console.error(`Logic Error: Attempting to type at placeholder chunk index ${currentTypedIndexInChunk}.`);
-             return;
-        }
-
-
-        if (key.length === 1) { // Regular character or space
+        if (key.length === 1) {
             const typedChar = key;
-            const charSpan = document.getElementById(`chunk-char-${currentTypedIndexInChunk}`); // Chunk ID
+            const charSpan = document.getElementById(`chunk-char-${currentTypedIndexInChunk}`);
             if (!charSpan) { console.error(`Chunk span not found: index ${currentTypedIndexInChunk}`); return; }
-
             if (!startTime) startTime = new Date();
-
-            // Check correctness (remains same)
+            let correct = false;
             const isExpectedSpace = (expectedChar === ' ' || expectedChar === '\u00A0');
             const isTypedSpace = (typedChar === ' ');
-            let correct = false;
-            if ((isTypedSpace && isExpectedSpace) || (!isExpectedSpace && typedChar === expectedChar)) {
-                correct = true;
-                charSpan.classList.add('correct');
-                charSpan.classList.remove('incorrect', 'current', 'needs-enter');
-            } else {
-                correct = false;
-                if (!charSpan.classList.contains('incorrect')) { errors++; }
-                charSpan.classList.add('incorrect');
-                charSpan.classList.remove('correct', 'current', 'needs-enter');
-            }
+             if ((isTypedSpace && isExpectedSpace) || (!isExpectedSpace && typedChar === expectedChar)) {
+                 correct = true; charSpan.classList.add('correct'); charSpan.classList.remove('incorrect', 'current', 'needs-enter');
+             } else {
+                 correct = false; if (!charSpan.classList.contains('incorrect')) { errors++; } charSpan.classList.add('incorrect'); charSpan.classList.remove('correct', 'current', 'needs-enter');
+             }
             totalTyped++;
-
             const processedChunkIndex = currentTypedIndexInChunk;
-            currentTypedIndexInChunk++; // Advance index IN CHUNK
+            currentTypedIndexInChunk++;
 
-            // Check if the NEXT character IN CHUNK is a placeholder
             let nextCharIsBreak = (currentTypedIndexInChunk < currentChunkText.length && currentChunkText[currentTypedIndexInChunk] === P_BREAK_PLACEHOLDER);
-
-            if (nextCharIsBreak) {
+             if (nextCharIsBreak) {
                  console.log(`Next char at chunk index ${currentTypedIndexInChunk} is a break.`);
-                 const spanToMark = document.getElementById(`chunk-char-${processedChunkIndex}`); // Mark the one just typed
-                 if (spanToMark) {
-                     if(correct) { spanToMark.classList.add('needs-enter'); }
-                     else { spanToMark.classList.remove('needs-enter'); }
-                 }
-            }
+                 const spanToMark = document.getElementById(`chunk-char-${processedChunkIndex}`);
+                 if (spanToMark) { if(correct) { spanToMark.classList.add('needs-enter'); } else { spanToMark.classList.remove('needs-enter'); } }
+             }
 
-            updateCursor();
-            updateStats();
-            updateBookProgress();
-            saveProgress(); // Save overall chapter progress
+            updateCursor(); updateStats(); updateBookProgress(); saveProgress();
 
-            // --- Check for Chunk Completion & Auto-Advance ---
-            if (currentTypedIndexInChunk >= currentChunkText.length && !nextCharIsBreak) { // Reached end and NOT waiting for enter
-                console.log(`Completed chunk ${currentChunkIndex}.`);
-                if (currentChunkIndex < chapterChunks.length - 1) {
+            if (currentTypedIndexInChunk >= currentChunkText.length && !nextCharIsBreak) {
+                 console.log(`Completed chunk ${currentChunkIndex}.`);
+                 if (currentChunkIndex < chapterChunks.length - 1) {
                      console.log("Auto-advancing to next chunk...");
-                     // Use setTimeout to allow UI to update briefly before loading next
-                     setTimeout(() => navigateChunk(1), 100); // Short delay
-                } else {
+                     setTimeout(() => navigateChunk(1), 100);
+                 } else {
                      console.log("Last chunk of the chapter completed.");
-                     // Optional: Auto-advance to next CHAPTER?
-                     // setTimeout(() => navigateChapter(1), 200);
-                     // Or just mark chapter visually complete
-                     markChapterAsCompletedUI(); // Ensure styles are fully correct
-                }
-            }
-            return; // Handled regular typing
+                     markChapterAsCompletedUI();
+                 }
+             }
+            return;
         }
+        // --- End Case 2 ---
 
         console.log("handleKeyDown: Unhandled key:", key);
    } // End handleKeyDown
@@ -778,13 +733,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
 
-    function navigateChapter(direction) {
-        if (isLoading || !spineItems || spineItems.length === 0) return;
-        const newIndex = currentChapterIndex + direction;
-        if (newIndex >= 0 && newIndex < spineItems.length) {
-            initialCharIndexToLoad = 0; // Reset char index when navigating chapters
-            loadChapter(newIndex);
-        }
+   function navigateChapter(direction) {
+    if (isLoading || !spineItems || spineItems.length === 0) return;
+    const newIndex = currentChapterIndex + direction;
+    if (newIndex >= 0 && newIndex < spineItems.length) {
+        console.log(`Navigating chapter from ${currentChapterIndex} to ${newIndex}`);
+        // *** SAVE progress for the chapter we are LEAVING ***
+        saveProgress();
+        // Load the new chapter (it will handle resetting chunk state etc.)
+        loadChapter(newIndex);
+    }
     }
 
     // --- Utility Functions ---
@@ -1029,9 +987,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const key = PROGRESS_KEY_PREFIX + currentFilename;
         let progressData = {};
-        let existingOverallIndex = 0; // Default to 0 if not found
+        let existingOverallIndex = -1; // Use -1 to differentiate from unloaded state
 
-        // Try to load existing data first to merge AND get current saved index
+        // Try to load existing data first to merge
         try {
             const existingData = localStorage.getItem(key);
             if (existingData) {
@@ -1044,7 +1002,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (e) {
             console.error("Error parsing existing progress data before saving:", e);
             progressData = {}; // Start fresh if parsing fails
-            existingOverallIndex = 0; // Reset on parse error
+            existingOverallIndex = -1;
         }
 
         // Ensure chapterProgress object exists
@@ -1052,30 +1010,32 @@ document.addEventListener('DOMContentLoaded', () => {
             progressData.chapterProgress = {};
         }
 
-        // --- Calculate the potential NEW overall character index ---
+        // --- Calculate the NEW overall character index based on current state ---
         let newOverallChapterIndex = chunkStartIndexInChapter + currentTypedIndexInChunk;
 
         // Adjust if waiting for enter BEFORE the current index
         if (currentTypedIndexInChunk > 0) {
             const precedingSpan = document.getElementById(`chunk-char-${currentTypedIndexInChunk - 1}`);
             if (precedingSpan?.classList.contains('needs-enter')) {
+                // If waiting, the *actual* progress saved should be before the break
                 newOverallChapterIndex = chunkStartIndexInChapter + currentTypedIndexInChunk - 1;
-                // Log adjustment only if it happens
                 // console.log("saveProgress: Adjusting potential save index due to needs-enter state.");
             }
         }
         // --- End Calculation ---
 
-        // *** CRITICAL FIX: Only update if new index is greater than existing ***
-        if (newOverallChapterIndex >= existingOverallIndex) {
-            // Update the overall character index for the CURRENT chapter
-            progressData.chapterProgress[String(currentChapterIndex)] = newOverallChapterIndex;
+        // *** REMOVED CHECK: Always update the stored progress ***
+        // The load logic handles displaying correctly based on this saved value.
+        progressData.chapterProgress[String(currentChapterIndex)] = newOverallChapterIndex;
+
+        // Log the update (more informative)
+        if (existingOverallIndex === -1) {
+             console.log(`saveProgress: Initializing chapter ${currentChapterIndex} to overall index ${newOverallChapterIndex}`);
+        } else if (newOverallChapterIndex !== existingOverallIndex) {
             console.log(`saveProgress: Updating chapter ${currentChapterIndex} from ${existingOverallIndex} to new overall index ${newOverallChapterIndex}`);
         } else {
-            // Log if we are *not* saving because the new index is smaller (due to backward nav state)
-            console.log(`saveProgress: Skipping update for chapter ${currentChapterIndex}. New index ${newOverallChapterIndex} is not greater than existing ${existingOverallIndex}.`);
-            // Keep the existing higher value in progressData
-            progressData.chapterProgress[String(currentChapterIndex)] = existingOverallIndex;
+             // Optionally log saves even if the index didn't change
+             // console.log(`saveProgress: Re-saving chapter ${currentChapterIndex} at overall index ${newOverallChapterIndex}`);
         }
 
 
@@ -1088,7 +1048,7 @@ document.addEventListener('DOMContentLoaded', () => {
              progressData.bookLengthData.chapLengths = chapterLengths;
         }
 
-        // Save the progress object (either updated or kept same)
+        // Save the progress object
         try {
             localStorage.setItem(key, JSON.stringify(progressData));
         } catch (e) {
@@ -1210,13 +1170,21 @@ document.addEventListener('DOMContentLoaded', () => {
     function loadChunk(chunkIndex, initialOffset = null) {
         // --- Validation and Empty Chapter Handling ---
         if (chunkIndex < 0 || chunkIndex >= chapterChunks.length) {
-            if (chapterChunks.length === 0) { /* ... empty handling ... */ return; }
-            else { console.warn(`loadChunk: Invalid chunk index ${chunkIndex}.`); return; }
+            if (chapterChunks.length === 0) {
+                console.log("loadChunk: No chunks available (chapter likely empty).");
+                currentChunkIndex = 0; currentChunkText = ""; currentTypedIndexInChunk = 0; chunkStartIndexInChapter = 0;
+                displayChunkText(); updateNavigation(); updateBookProgress();
+                sourceTextArea.dataset.readonly = 'true'; // Mark empty as read-only
+                return;
+            } else {
+                console.warn(`loadChunk: Invalid chunk index ${chunkIndex}.`);
+                return;
+            }
         }
         // --- End Validation ---
 
         console.log(`loadChunk: Loading chunk ${chunkIndex}. Received initialOffset: ${initialOffset} (type: ${typeof initialOffset})`);
-        currentChunkIndex = chunkIndex;
+        currentChunkIndex = chunkIndex; // Update the global chunk index
 
         // --- Calculate start index of THIS chunk ---
         let calculatedStartIndex = 0;
@@ -1279,18 +1247,17 @@ document.addEventListener('DOMContentLoaded', () => {
         // --- Restore Visual State based on Overall Saved Progress ---
 
         // Determine how many characters within THIS chunk should be marked correct
-        // based on the overall saved progress.
         let charsToMarkCorrectInChunk = Math.max(0, overallSavedCharIndex - chunkStartIndexInChapter);
-        // Clamp this to the actual length of the chunk
-        charsToMarkCorrectInChunk = Math.min(charsToMarkCorrectInChunk, currentChunkText.length);
-
+        charsToMarkCorrectInChunk = Math.min(charsToMarkCorrectInChunk, currentChunkText.length); // Clamp
         console.log(`loadChunk: Restoring visual state up to index ${charsToMarkCorrectInChunk} in chunk (based on overall saved ${overallSavedCharIndex}).`);
 
-        // *** FIX: Use charsToMarkCorrectInChunk for the loop limit ***
-        const loopEndIndex = charsToMarkCorrectInChunk;
-        console.log(`loadChunk: Restoration loop running from i=0 to i < ${loopEndIndex}`); // Added log
+        // Determine if the chunk IS visually complete based on this restoration index
+        const isVisuallyComplete = (charsToMarkCorrectInChunk >= currentChunkText.length);
 
-        for (let i = 0; i < loopEndIndex; i++) { // <<< Use the correct limit
+        // Apply 'correct' style up to the calculated restoration point
+        const loopEndIndex = charsToMarkCorrectInChunk;
+        console.log(`loadChunk: Restoration loop running from i=0 to i < ${loopEndIndex}`);
+        for (let i = 0; i < loopEndIndex; i++) {
             if (currentChunkText[i] !== P_BREAK_PLACEHOLDER) {
                 const charSpan = document.getElementById(`chunk-char-${i}`);
                 if (charSpan) {
@@ -1300,34 +1267,21 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        // Determine if the chunk IS visually complete based on the restoration index
-        const isVisuallyComplete = (charsToMarkCorrectInChunk >= currentChunkText.length); // <<< Use correct variable
-
-        // Loop 2: If chunk is considered complete, ensure ALL chars are visually correct
-        // This remains useful as a safeguard and handles the case where index was already at end
+        // If determined complete, ensure typing index is at end & clear trailing needs-enter
         if (isVisuallyComplete) {
-             console.log("loadChunk: Applying 'correct' style to any remaining chars due to completion state.");
-             // Loop from where the first loop *would* have stopped if not complete, up to the end
-             for (let i = loopEndIndex; i < currentChunkText.length; i++) {
-                 if (currentChunkText[i] !== P_BREAK_PLACEHOLDER) {
-                     const charSpan = document.getElementById(`chunk-char-${i}`);
-                     if (charSpan && !charSpan.classList.contains('correct')) {
-                         charSpan.classList.remove('incorrect', 'current', 'needs-enter');
-                         charSpan.classList.add('correct');
-                     }
-                 }
-             }
-             // Ensure typing index reflects visual completion
+             console.log("loadChunk: Chunk rendered as visually complete.");
              if (currentTypedIndexInChunk < currentChunkText.length) {
                  currentTypedIndexInChunk = currentChunkText.length;
-                 console.log(`loadChunk: Adjusted typing index to ${currentTypedIndexInChunk} post-completion rendering.`);
+                 console.log(`loadChunk: Adjusted typing index to ${currentTypedIndexInChunk} to match visual completion.`);
              }
+              // Ensure no 'needs-enter' on last char if complete
+              if (currentChunkText.length > 0) {
+                   const lastCharSpan = document.getElementById(`chunk-char-${currentChunkText.length - 1}`);
+                   lastCharSpan?.classList.remove('needs-enter');
+              }
         }
-
-
-        // Restore 'needs-enter' state ONLY if NOT visually complete
-        // Check based on the number of chars marked correct
-        if (!isVisuallyComplete && charsToMarkCorrectInChunk > 0 && charsToMarkCorrectInChunk < currentChunkText.length) {
+        // Otherwise, restore 'needs-enter' if necessary
+        else if (charsToMarkCorrectInChunk > 0 && charsToMarkCorrectInChunk < currentChunkText.length) {
              const charAfterCorrect = currentChunkText[charsToMarkCorrectInChunk];
              if (charAfterCorrect === P_BREAK_PLACEHOLDER) {
                   const prevCharIndex = charsToMarkCorrectInChunk - 1;
@@ -1338,12 +1292,12 @@ document.addEventListener('DOMContentLoaded', () => {
                   }
              }
          }
-        // Ensure no 'needs-enter' if visually complete
-        else if (isVisuallyComplete && currentChunkText.length > 0) { // Check length > 0
-             const lastCharSpan = document.getElementById(`chunk-char-${currentChunkText.length - 1}`);
-             lastCharSpan?.classList.remove('needs-enter');
-        }
         // --- End Restore Visual State ---
+
+         // --- Set Read-Only State ---
+         sourceTextArea.dataset.readonly = isVisuallyComplete ? 'true' : 'false';
+         console.log(`loadChunk: Setting chunk read-only state to: ${sourceTextArea.dataset.readonly}`);
+         // --- End Set Read-Only State ---
 
         // --- Update UI ---
         updateStats();
@@ -1422,6 +1376,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // Chapter Boundary Check (If complete and going past last chunk)
             if (newChunkIndex >= chapterChunks.length) {
                  console.log("navigateChunk: At end of last chunk, attempting to navigate to next chapter.");
+                 // Note: navigateChapter handles saving internally now
                  navigateChapter(1);
                  return;
             }
@@ -1429,6 +1384,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // Chapter Boundary Check (If at first chunk)
             if (currentChunkIndex <= 0) {
                 console.log("navigateChunk: At start of first chunk, attempting to navigate to previous chapter.");
+                 // Note: navigateChapter handles saving internally now
                 navigateChapter(-1);
                 return;
             }
@@ -1439,13 +1395,13 @@ document.addEventListener('DOMContentLoaded', () => {
         // --- Normal Chunk Navigation (within the same chapter) ---
         if (newChunkIndex >= 0 && newChunkIndex < chapterChunks.length) {
             console.log(`Navigating chunk from ${currentChunkIndex} to ${newChunkIndex}`);
-            saveProgress(); // Save state of chunk we are leaving
+            // *** REMOVED saveProgress() call from here ***
 
             // Pass explicit offset 0 ONLY when going backward
             if (direction === -1) {
                 loadChunk(newChunkIndex, 0); // Load previous chunk at its start
             } else {
-                // *** REVERTED: Load next chunk, let it calculate offset from saved progress ***
+                // Load next chunk, let it calculate offset from saved progress
                 loadChunk(newChunkIndex);
             }
         } else {
