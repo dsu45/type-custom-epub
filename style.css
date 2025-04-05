@@ -1,0 +1,379 @@
+/* --- Global Styles & Cooler Monokai Theme --- */
+:root {
+    /* Base */
+    --bg-color: #1d1c1f; /* Keep Monokai Background */
+
+    /* Text */
+    --fg-color: #df9f2a; /* Brighter Cool White/Light Blue (Typed Text) */
+    --gray-color: #6A737D; /* Cooler Dim Gray (Untyped Text) */
+
+    /* Accents & Status */
+    --purple-color: #79B8FF; /* Cooler Blue (Cursor BG, Buttons, Accent) */
+    --blue-color: #88C0D0;   /* Nord Blue (Stats like WPM) */
+    --green-color: #A3BE8C;  /* Nord Cool Green (Stats like Accuracy) */
+    --yellow-color: #EBCB8B; /* Nord Yellow (Hover accent - optional) */
+
+    /* Errors */
+    --red-color: #BF616A;    /* Nord Red (Errors) */
+    --red-bg-color: rgba(191, 97, 106, 0.15); /* Error background */
+
+    /* Specific UI Elements */
+    --needs-enter-cue-color: var(--purple-color); /* Color for the 'needs enter' symbol */
+
+    /* Font */
+    --font-main: 'Roboto Mono', monospace;
+}
+
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    background-color: var(--bg-color);
+    color: var(--fg-color);
+    font-family: var(--font-main);
+    line-height: 1.6;
+    display: flex;
+    flex-direction: column;
+    /* remove align-items center */
+    padding: 0 20px; /* Add horizontal padding */
+    min-height: 100vh;
+    /* Adjust padding top to account for top-bar */
+    padding-top: 60px; /* Adjust as needed based on top-bar height */
+}
+
+body.is-loading {
+    /* Optional: Subtle indication */
+    /* cursor: wait; */
+}
+
+h1 { /* Removed from HTML, hide if re-added */
+   display: none;
+}
+
+/* --- Top Bar - Spanning Full Width --- */
+.top-bar {
+    display: flex;
+    justify-content: space-between; /* Key for left/right alignment */
+    align-items: center; /* Vertically align items */
+    width: 100%; /* Span full viewport width */
+    position: fixed; /* Keep it fixed */
+    top: 0;
+    left: 0; /* Align to left edge */
+    padding: 10px 25px; /* Vertical padding, Increased horizontal padding */
+    background-color: var(--bg-color);
+    z-index: 10;
+    border-bottom: 1px solid #3e3d32;
+    min-height: 45px; /* Ensure minimum height */
+    /* Remove transform/max-width */
+}
+
+
+/* --- Top Left Group (Navigation) --- */
+#navigation {
+    display: flex;
+    align-items: center;
+    gap: 10px; /* Adjust gap */
+}
+
+/* Modernized Button Styles */
+#navigation button {
+    background-color: transparent;
+    color: var(--gray-color); /* Dimmer default color */
+    border: none; /* Remove border */
+    padding: 8px 10px; /* Adjust padding */
+    border-radius: 5px; /* Slightly rounded */
+    cursor: pointer;
+    font-family: var(--font-main);
+    font-size: 1.2em; /* Make arrows larger */
+    line-height: 1; /* Ensure consistent height */
+    transition: background-color 0.2s ease, color 0.2s ease, transform 0.1s ease;
+}
+#navigation button:hover:not(:disabled) {
+    background-color: rgba(121, 184, 255, 0.15); /* Use accent color with alpha */
+    color: var(--purple-color); /* Accent color on hover */
+    transform: scale(1.05); /* Slight scale effect */
+}
+#navigation button:active:not(:disabled) {
+    transform: scale(0.98); /* Slight shrink on click */
+}
+#navigation button:disabled {
+    color: #4a5057; /* Darker gray when disabled */
+    cursor: not-allowed;
+    opacity: 0.5;
+    transform: none; /* Disable hover/active effects */
+}
+
+/* Replace text with arrows using CSS content */
+#prevChapter::before {
+     content: '←';
+     display: inline-block; /* Needed for potential transforms */
+}
+#nextChapter::before {
+     content: '→';
+     display: inline-block;
+}
+/* Common styles for arrow buttons */
+#prevChapter, #nextChapter {
+    font-weight: bold; /* Make arrows bolder */
+    min-width: 35px; /* Ensure minimum size */
+    text-align: center;
+    /* Hide actual button text if any remains */
+    color: transparent;
+    /* Position the pseudo-element */
+    position: relative;
+}
+/* Position the arrow within the button */
+#prevChapter::before, #nextChapter::before {
+     color: var(--gray-color); /* Initial arrow color */
+     position: absolute;
+     top: 50%;
+     left: 50%;
+     transform: translate(-50%, -50%);
+     transition: color 0.2s ease; /* Transition arrow color */
+}
+/* Arrow color on button hover */
+#navigation button:hover:not(:disabled)::before {
+    color: var(--purple-color);
+}
+/* Arrow color when button disabled */
+#navigation button:disabled::before {
+     color: #4a5057;
+     opacity: 0.5;
+}
+
+
+#chapterInfo {
+    color: var(--gray-color);
+    font-size: 0.9em;
+    padding: 0 5px; /* Add some horizontal padding */
+    white-space: nowrap; /* Prevent wrapping */
+}
+
+
+/* --- Top Right Group (Stats & File) --- */
+.top-right-group {
+    display: flex;
+    align-items: center;
+    gap: 20px; /* Space between file selector and stats */
+}
+
+#file-selector {
+    display: flex; /* Align label and input */
+    align-items: center;
+    gap: 5px;
+}
+#file-selector label {
+     color: var(--gray-color);
+     font-size: 0.9em;
+}
+#epubFile {
+    color: var(--gray-color); /* Make input text itself gray */
+    font-size: 0.85em;
+    max-width: 150px; /* Limit width to prevent overflow */
+}
+#epubFile::file-selector-button {
+    background-color: var(--purple-color);
+    color: var(--bg-color);
+    border: none;
+    padding: 4px 8px; /* Adjust padding */
+    border-radius: 3px;
+    cursor: pointer;
+    font-family: var(--font-main);
+    transition: background-color 0.2s ease;
+    font-size: 0.85em;
+    margin-left: 3px; /* Space between default text and button */
+}
+#epubFile::file-selector-button:hover {
+    background-color: var(--yellow-color); /* Optional different hover */
+    color: var(--bg-color);
+}
+
+#stats {
+    display: flex;
+    align-items: center;
+    gap: 15px; /* Adjust gap */
+    color: var(--gray-color);
+    font-size: 0.9em;
+}
+#stats span {
+    min-width: 65px; /* Adjust as needed */
+    text-align: right;
+    white-space: nowrap; /* Prevent wrapping */
+}
+/* Specific stat colors */
+#stats #bookProgress { color: var(--gray-color); }
+#stats #wpm { color: var(--blue-color); }
+#stats #accuracy { color: var(--green-color); }
+#stats #errors { color: var(--red-color); }
+
+
+/* --- Text Display Area --- */
+#text-display-area {
+    width: 100%;
+    max-width: 850px; /* Keep max-width for readability */
+    margin-left: auto; /* Center the area itself */
+    margin-right: auto;
+    background-color: transparent;
+    border-radius: 0;
+    padding: 20px 15px;
+    /* Adjust max-height based on new top-bar padding */
+    max-height: calc(100vh - 80px); /* Adjust this value if top bar height changes */
+    position: relative;
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    scroll-behavior: smooth;
+    margin-top: 10px; /* Add a bit space below top bar */
+}
+
+/* --- Source Text Styling (Paragraphs/Spans) --- */
+#source-text {
+    font-size: 1.6em;
+    font-family: var(--font-main);
+    color: var(--gray-color); /* Untyped Text */
+    white-space: pre-wrap; /* Allows wrapping and respects spaces/newlines */
+    line-height: 1.9; /* Adjust for readability */
+    text-align: left;
+    outline: none;
+    padding: 0;
+    border: none;
+    background-color: transparent;
+    /* Prevent selection if needed, though might hinder copy/paste */
+    /* user-select: none; */
+}
+
+/* Span Styles - target spans with chunk prefix */
+#source-text span[id^="chunk-char-"] {
+    display: inline; /* Keep inline */
+    border-radius: 2px;
+    transition: color 0.1s ease, background-color 0.1s ease;
+    position: relative; /* Needed for ::after positioning */
+}
+
+/* Span State Styles */
+#source-text span[id^="chunk-char-"].correct {
+    color: var(--fg-color); /* Typed text color */
+}
+#source-text span[id^="chunk-char-"].incorrect {
+    color: var(--red-color); /* Error text color */
+    background-color: var(--red-bg-color); /* Error background */
+    /* text-decoration: underline; */ /* Optional: underline errors */
+    /* text-decoration-color: var(--red-color); */
+}
+#source-text span[id^="chunk-char-"].current {
+    color: var(--bg-color); /* Text color for contrast */
+    background-color: var(--purple-color); /* Cursor background */
+    border-radius: 2px; /* Match other spans */
+    /* Optional: Add blinking effect */
+    /* animation: blinkCursor 1s infinite step-end; */
+}
+
+/* Needs Enter Cue using ::after */
+#source-text span[id^="chunk-char-"].needs-enter::after {
+    content: ' \u2190'; /* Space + Left Arrow */
+    display: inline-block;
+    position: absolute;
+    left: 100%;
+    top: 50%;
+    transform: translateY(-50%);
+    margin-left: 2px; /* Space after character */
+    color: var(--needs-enter-cue-color);
+    font-size: 0.8em; /* Relative size */
+    font-weight: bold;
+    line-height: 1; /* Prevent affecting parent line height */
+    user-select: none; -webkit-user-select: none; -moz-user-select: none;
+    pointer-events: none; /* Prevent interaction */
+    /* animation: fadeIn 0.2s ease-in; */ /* Optional fade */
+}
+
+/* Ensure cue remains visible even if char is incorrect */
+#source-text span[id^="chunk-char-"].needs-enter.incorrect {
+    background-color: var(--red-bg-color); /* Keep error background */
+}
+#source-text span[id^="chunk-char-"].needs-enter.incorrect::after {
+    color: var(--needs-enter-cue-color); /* Keep cue color */
+}
+
+/* Optional blinking cursor animation */
+/* @keyframes blinkCursor {
+  50% { background-color: transparent; color: var(--purple-color); }
+} */
+
+
+/* Placeholder/Message Styling */
+#source-text p {
+    color: var(--gray-color);
+    font-size: 0.9em; /* Smaller relative size */
+    text-align: center;
+    padding: 40px 20px; /* More padding for messages */
+    line-height: 1.5; /* Adjust line height for paragraphs */
+}
+#source-text p strong { /* Style filename in prompt */
+    color: var(--fg-color);
+    font-weight: normal; /* Avoid bold on bold */
+}
+#source-text p[style*="color: red;"] {
+     color: var(--red-color);
+     font-weight: bold;
+}
+
+
+/* --- Hidden Input Area --- */
+#typing-area {
+    height: 1px;
+    width: 1px;
+    overflow: hidden;
+    position: absolute;
+    left: -9999px;
+}
+#hidden-input {
+    opacity: 0;
+    position: absolute;
+}
+
+/* --- Optional: Simple Responsiveness --- */
+@media (max-width: 768px) {
+    body {
+        padding-top: 80px; /* Adjust if top bar wraps and becomes taller */
+        padding-left: 10px;
+        padding-right: 10px;
+    }
+    .top-bar {
+        flex-wrap: wrap; /* Allow wrapping */
+        justify-content: center; /* Center items when wrapped */
+        gap: 8px 15px; /* Adjust gaps */
+        padding: 8px 15px; /* Adjust padding */
+        min-height: 0; /* Allow height to adjust when wrapped */
+         /* Optional: Make static if preferred on mobile */
+         /* position: static; */
+         /* transform: none; */
+    }
+    /* Adjust order if needed when wrapped */
+    #navigation { order: 1; width: 100%; justify-content: center; }
+    .top-right-group { order: 2; justify-content: center; width: 100%; flex-wrap: wrap; gap: 10px 15px;} /* Allow right group to wrap too */
+    #file-selector { /* Ensure file selector doesn't take excessive width */ }
+    #stats { order: 3; /* Ensure stats come last if wrapped */ justify-content: center; width: 100%; flex-wrap: wrap; gap: 10px 12px; font-size: 0.85em; margin-top: 5px;}
+    #stats span { min-width: auto; text-align: center;}
+
+    #text-display-area {
+        max-width: 100%;
+        padding: 15px 10px;
+        max-height: calc(100vh - 100px); /* Adjust max-height */
+    }
+    #source-text {
+        font-size: 1.3em;
+        line-height: 1.8;
+    }
+}
+
+@media (max-width: 480px) {
+     body { padding-top: 90px; /* May need more space */ }
+     #source-text { font-size: 1.2em; }
+     #navigation button { font-size: 1em; padding: 6px 8px; }
+     #stats { gap: 8px 10px;}
+     .top-right-group { flex-direction: column; gap: 10px;} /* Stack file and stats */
+}

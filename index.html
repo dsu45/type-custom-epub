@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EPUB Chapter Typer</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <script src="libs/jszip.min.js"></script>
+    <script src="libs/epub.min.js"></script>
+</head>
+<body>
+
+    <!-- Top Bar for Nav and Stats -->
+    <div class="top-bar">
+        <!-- Top Left Group -->
+        <div id="navigation">
+            <button id="prevChapter" title="Previous Chapter" disabled></button> <!-- Tooltip Added -->
+            <span id="chapterInfo">Chapter: - / -</span>
+            <button id="nextChapter" title="Next Chapter" disabled></button> <!-- Tooltip Added -->
+            <!-- Add Chunk Nav Info (Optional Placeholder) -->
+            <!-- <span id="chunkInfo">Page: - / -</span> -->
+        </div>
+
+        <!-- Top Right Group -->
+        <div class="top-right-group">
+            <div id="file-selector">
+                 <label for="epubFile">File:</label>
+                 <input type="file" id="epubFile" accept=".epub">
+            </div>
+
+            <div id="stats">
+                <span id="bookProgress">Book: 0%</span>
+                <span id="wpm">WPM: 0</span>
+                <span id="accuracy">Acc: 100%</span>
+                <span id="errors">Errors: 0</span>
+            </div>
+        </div>
+    </div><!-- End top-bar -->
+
+    <!-- Text Display Area - Centered -->
+    <div id="text-display-area">
+        <div id="source-text"><p>Please select an EPUB file to begin.</p></div>
+    </div>
+
+    <!-- Hidden Input Area -->
+    <div id="typing-area">
+       <input type="text" id="hidden-input" style="opacity:0; position:absolute; top: -500px;">
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
