@@ -68,115 +68,82 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function handleFileSelect(event) {
         const file = event.target.files[0];
-        const expectedFilename = currentFilename; // Store the potentially pre-loaded filename from page load
+        const expectedFilename = currentFilename; // Store the potentially remembered filename
 
-        // Validation check using 'file'
-        if (isLoading || !file || !file.name.endsWith('.epub')) {
-           if (file && !file.name.endsWith('.epub')) { // Check if 'file' exists but is wrong type
-               alert("Please select a valid .epub file.");
-           } else if (!file) {
-                console.log("No file selected."); // Handle case where no file is chosen after prompt
-           }
-           // If isLoading is true, log that too
-           if (isLoading) {
-               console.log("handleFileSelect: Aborted because isLoading is true.");
-           }
-           try { fileInput.value = ''; } catch(e) { console.warn("Couldn't clear file input");}
-           return; // Exit if loading, no file, or wrong file type
-        }
+        // Validation...
+        if (isLoading || !file || !file.name.endsWith('.epub')) { /* ... */ return; }
 
-        // --- Check if selected file matches the expected one (if any) ---
         const selectedFilename = file.name;
+
+        // --- Check if selected file is DIFFERENT ---
         if (expectedFilename && selectedFilename !== expectedFilename) {
-            console.log(`Selected file '${selectedFilename}' differs from expected '${expectedFilename}'. Resetting progress and state.`);
-            // Clear progress associated with the OLD filename before proceeding
-             clearProgress(expectedFilename); // Clear old progress
-             resetState(true); // Full reset including filename, chapter index, etc.
-             currentFilename = selectedFilename; // Set to the NEW selected filename
-             // UI will be reset implicitly by loading the new file below
+            console.log(`Selected file '${selectedFilename}' differs from expected '${expectedFilename}'. Resetting application state for new book.`);
+
+            // *** CHANGE: Do NOT clear the old book's progress ***
+            // clearProgress(expectedFilename); // <<<< COMMENTED OUT or DELETED
+
+            // Perform a full reset of the application's *current* state for the new book
+            resetState(true); // Resets chapter/chunk state, lengths, etc., clears in-memory filename
+            currentFilename = selectedFilename; // Set to the NEW selected filename
+            console.log("handleFileSelect: State reset for new file selection.");
+        } else if (!expectedFilename) {
+             // No previous file expected, just set the filename and reset typing state
+             currentFilename = selectedFilename;
+             resetState(false); // Basic reset (keep filename, reset typing state)
         } else {
-             // Filename matches expected, or no specific file was expected
-             currentFilename = selectedFilename; // Ensure it's set for the loading process
-             // If filename matches, we only need a partial reset
-             resetState(false); // Keep filename, reset typing/chapter state
+            // Filename matches, just do a basic reset of typing state
+            // This might happen if user re-selects the same file after page refresh
+             resetState(false); // Keep filename, reset typing state
         }
-        // --- END Check ---
+        // --- End Check ---
 
-
-        console.log(`handleFileSelect: Starting for ${currentFilename}`);
-        // resetState(false) was called above if filename matched
-
-        console.log(`handleFileSelect: Setting isLoading = true`);
+        console.log(`handleFileSelect: Starting load for ${currentFilename}`);
         setLoadingState(true, "Loading EPUB...");
-
         const reader = new FileReader();
 
         reader.onload = async (e) => {
             console.log(`handleFileSelect: reader.onload started.`);
             const arrayBuffer = e.target.result;
             try {
-                book = ePub(arrayBuffer);
-                await book.ready;
-                await book.spine.ready;
+                // ... (ePub loading, spine check) ...
+                book = ePub(arrayBuffer); await book.ready; await book.spine.ready;
+                spineItems = book.spine.spineItems; if (!spineItems || spineItems.length === 0) { throw new Error("Invalid spine"); }
+                console.log(`handleFileSelect: Spine ready for ${currentFilename}, found ${spineItems.length} items.`);
 
-                spineItems = book.spine.spineItems;
-                if (!spineItems || !Array.isArray(spineItems) || spineItems.length === 0) {
-                     throw new Error("EPUB spine data is invalid or empty.");
-                }
-                console.log(`handleFileSelect: Spine ready, found ${spineItems.length} items.`);
+                // --- Load progress FOR THE CURRENT FILE ---
+                loadProgress(); // Loads data based on currentFilename from localStorage
+                console.log(`handleFileSelect: loadProgress finished.`);
 
-                // --- Load progress (for the confirmed currentFilename) ---
-                // This ensures progress (including cached lengths) is loaded for the file being processed.
-                loadProgress();
-                console.log(`handleFileSelect: loadProgress finished. Target chapter index: ${currentChapterIndex}. Initial char index: ${initialCharIndexToLoad}`);
+                // --- Calculate/Use Cached Length FOR THE CURRENT FILE ---
+                if (!bookLengthCalculated) { /* ... calculate ... */
+                     console.log(`handleFileSelect: Calculating book length for ${currentFilename}...`);
+                     await calculateTotalBookCharacters();
+                     console.log(`handleFileSelect: Book length calculation finished for ${currentFilename}.`);
+                 }
+                else { console.log("handleFileSelect: Using cached book length data."); updateBookProgress(); }
 
-                // --- Calculate or Use Cached Book Length ---
-                if (!bookLengthCalculated) {
-                    console.log(`handleFileSelect: Calculating book length...`);
-                    // Consider adding setLoadingState here if calculation is long
-                    // setLoadingState(true, "Calculating book length...");
-                    await calculateTotalBookCharacters(); // Calculates and sets bookLengthCalculated flag
-                    console.log(`handleFileSelect: Book length calculation finished.`);
-                    // If you added setLoadingState above, set it false here if needed,
-                    // but the main setLoadingState(false) below should handle it.
-                } else {
-                    console.log("handleFileSelect: Using cached book length data.");
-                    updateBookProgress(); // Update display with cached data now that spine is ready
-                }
-
-                // --- Save Preferences and Load Chapter ---
-                localStorage.setItem(LAST_OPENED_KEY, currentFilename); // Save the *actually* loaded filename
-
-                console.log(`handleFileSelect: Setting isLoading = false before calling loadChapter.`);
+                // --- Save Preferences & Load Chapter FOR THE CURRENT FILE ---
+                localStorage.setItem(LAST_OPENED_KEY, currentFilename); // Remember this book as last opened
                 setLoadingState(false);
 
-                console.log(`handleFileSelect: isLoading is now ${isLoading}. Calling loadChapter(${currentChapterIndex}).`);
+                // Load the appropriate starting chapter (default 0 or potentially from loadProgress if adapted)
+                console.log(`handleFileSelect: isLoading is now ${isLoading}. Calling loadChapter(${currentChapterIndex}) for initial load.`);
                 await loadChapter(currentChapterIndex); // Load the target chapter
 
                 console.log(`handleFileSelect: loadChapter call finished.`);
-                // Save progress AFTER chapter load, which includes potential completion check
-                saveProgress();
+                // No immediate save needed here, save happens on interaction
 
-            } catch (err) {
-                 console.error("handleFileSelect: Error processing EPUB:", err);
+            } catch (err) { /* ... error handling ... */
+                 console.error(`handleFileSelect: Error processing EPUB ${currentFilename}:`, err);
                  alert(`Could not load or parse the EPUB file: ${err.message || 'Unknown error'}`);
-                 clearProgress(currentFilename); // Clear potentially corrupted progress
-                 resetState(true); // Full reset on critical error
-                 resetUI(); // Show initial prompt again
-                 console.log(`handleFileSelect: Error catch - Setting isLoading = false`);
-                 setLoadingState(false); // Ensure loading is off on error
-            }
+                 // clearProgress(currentFilename); // Don't clear on error either? Or maybe clear corrupted? Debatable.
+                 resetState(true); resetUI(); setLoadingState(false);
+             }
         };
-
-        reader.onerror = () => {
-            console.error("Error reading file.");
-            alert('Error reading file.');
-            resetState(true);
-            resetUI();
-            console.log(`handleFileSelect: reader.onerror - Setting isLoading = false`);
-            setLoadingState(false); // Ensure it's off on reader error too
-        };
-
+        reader.onerror = () => { /* ... error handling ... */
+             console.error("Error reading file."); alert('Error reading file.');
+             resetState(true); resetUI(); setLoadingState(false);
+         };
         reader.readAsArrayBuffer(file);
     }
 
@@ -525,9 +492,8 @@ document.addEventListener('DOMContentLoaded', () => {
          }
 
         const key = event.key;
-        const isCtrlBackspace = event.ctrlKey && key === 'Backspace';
 
-        // --- Arrow Key Chunk Navigation (Handle First - Always Allowed) ---
+        // --- Arrow Key Chunk Navigation ---
         if (key === 'ArrowLeft' || key === 'ArrowRight') {
             event.preventDefault();
             navigateChunk(key === 'ArrowRight' ? 1 : -1);
@@ -538,33 +504,25 @@ document.addEventListener('DOMContentLoaded', () => {
         // --- Check if current chunk is loaded as complete/read-only ---
         const isChunkReadOnly = sourceTextArea.dataset.readonly === 'true';
 
-        // --- Block ALL Editing Keys if Read-Only ---
-        if (isChunkReadOnly) {
-            // Allow navigation/utility keys even if read-only
-            const allowedReadOnlyKeys = ['Home', 'End', 'PageUp', 'PageDown', 'Tab', 'Shift', 'Control', 'Alt', 'Meta', 'CapsLock', 'Escape'];
-            if (!allowedReadOnlyKeys.includes(key)) {
-                // Block all other keys (letters, numbers, symbols, space, enter, backspace)
-                console.log(`Key [${key}] blocked: Chunk is loaded as complete/read-only.`);
-                event.preventDefault(); // Prevent default action
-                return; // Block the key press entirely
-            }
-             // If it's an allowed non-editing key, let it pass through OS/browser
-             else {
-                 console.log(`Allowing non-editing key [${key}] on read-only chunk.`);
-                 // Allow default browser behavior for these keys if needed,
-                 // but we don't need further processing in this function.
-                 // Returning here prevents hitting the preventDefault for Space/Enter later.
-                 return;
+        // Block non-navigation keys if read-only
+        if (isChunkReadOnly && !['ArrowLeft', 'ArrowRight', 'Home', 'End', 'PageUp', 'PageDown'].includes(key)) {
+             // Allow backspace *only if* cursor is beyond the actual content end
+             // (e.g., if needs-enter was active at the very end and index > length)
+             if (key === 'Backspace' && currentTypedIndexInChunk >= currentChunkText.length) {
+                  console.log("Allowing backspace at end of read-only chunk potentially for needs-enter cleanup.");
+             } else {
+                  console.log(`Key [${key}] blocked: Chunk is loaded as complete/read-only.`);
+                  event.preventDefault(); // Prevent default action for blocked keys too
+                  return; // Block keys like letters, space, enter, backspace (within text)
              }
         }
-        // --- End Read-only Check ---
+        // --- End Read-only check ---
 
-        // --- If NOT Read-Only, proceed with normal typing logic ---
 
         // Allow backspace even if technically "finished" (for needs-enter cleanup)
         if (currentTypedIndexInChunk >= currentChunkText.length && key !== 'Backspace') {
              let lastCharNeedsEnter = false;
-             if (currentTypedIndexInChunk > 0) {
+             if (currentTypedIndexInChunk > 0) { /* ... check needs-enter ... */
                  const lastSpan = document.getElementById(`chunk-char-${currentTypedIndexInChunk - 1}`);
                  lastCharNeedsEnter = lastSpan?.classList.contains('needs-enter') ?? false;
              }
@@ -574,21 +532,26 @@ document.addEventListener('DOMContentLoaded', () => {
              }
         }
 
+        const isCtrlBackspace = event.ctrlKey && key === 'Backspace';
 
-        // --- Prevent Default Actions for Space/Backspace/Enter (if not read-only) ---
-        if (key === ' ' || key === 'Backspace' || key === 'Enter') {
-            event.preventDefault();
-        }
+        // --- Prevent Default Actions ---
+        if (key === ' ' || key === 'Backspace' || key === 'Enter') { event.preventDefault(); }
 
-        // Ignore other non-typing keys that weren't explicitly allowed above or handled below
+        // Ignore other non-typing keys
         if (key.length > 1 && key !== 'Backspace' && key !== 'Enter' && !isCtrlBackspace) {
-            console.log("handleKeyDown ignored: Non-typing helper key:", key);
-            return;
+             console.log("handleKeyDown ignored: Non-typing helper key:", key);
+             return;
         }
 
-        // --- Handle Backspace (operates on chunk - only runs if NOT read-only) ---
+        // --- Handle Backspace (operates on chunk) ---
         if (key === 'Backspace') {
-            // No need for redundant read-only check here now due to the top-level check
+            event.preventDefault(); // Ensure it's prevented
+
+             // Re-check read-only state specifically for backspace action itself within text
+             if (isChunkReadOnly && currentTypedIndexInChunk < currentChunkText.length) {
+                  console.log("Backspace action blocked: Chunk is read-only.");
+                  return;
+             }
 
             let performSave = false; // Flag to save only if index actually changes
 
@@ -603,14 +566,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     const newIndex = targetIndex + 1; // Land after the space/placeholder/start
 
                     if (newIndex < originalIndex) { // Check if index changed
-                        for (let i = newIndex; i < originalIndex; i++) {
-                             if (currentChunkText[i] === P_BREAK_PLACEHOLDER) continue;
-                             const charSpan = document.getElementById(`chunk-char-${i}`);
-                             if (charSpan) {
-                                 if (charSpan.classList.contains('incorrect')) { errors = Math.max(0, errors - 1); }
-                                 charSpan.classList.remove('correct', 'incorrect', 'current', 'needs-enter');
-                             }
-                         }
+                        for (let i = newIndex; i < originalIndex; i++) { /* ... clear styles ... */
+                            if (currentChunkText[i] === P_BREAK_PLACEHOLDER) continue;
+                            const charSpan = document.getElementById(`chunk-char-${i}`);
+                            if (charSpan) {
+                                if (charSpan.classList.contains('incorrect')) { errors = Math.max(0, errors - 1); }
+                                charSpan.classList.remove('correct', 'incorrect', 'current', 'needs-enter');
+                            }
+                        }
                         currentTypedIndexInChunk = newIndex;
                         performSave = true; // Index changed, need to save
                     }
@@ -621,26 +584,26 @@ document.addEventListener('DOMContentLoaded', () => {
                      currentTypedIndexInChunk--; // Move index back first
 
                     const charSpan = document.getElementById(`chunk-char-${indexToClear}`);
-                    if (charSpan) {
+                    if (charSpan) { /* ... clear styles ... */
                         if (charSpan.classList.contains('incorrect')) { errors = Math.max(0, errors - 1); }
                         charSpan.classList.remove('correct', 'incorrect', 'current', 'needs-enter');
                         console.log(`Backspace cleared style from chunk index ${indexToClear}`);
                     }
-                     if(currentTypedIndexInChunk > 0) {
+                     if(currentTypedIndexInChunk > 0) { /* ... clear preceding needs-enter ... */
                           const newPrecedingSpan = document.getElementById(`chunk-char-${currentTypedIndexInChunk - 1}`);
                           if (newPrecedingSpan?.classList.contains('needs-enter')) {
                                newPrecedingSpan.classList.remove('needs-enter');
                                console.log(`Backspace removed needs-enter from chunk index ${currentTypedIndexInChunk - 1}`);
                           }
                      }
-                    if (currentTypedIndexInChunk === 0 && totalTyped <= 1) {
+                    if (currentTypedIndexInChunk === 0 && totalTyped <= 1) { /* ... reset timer ... */
                          startTime = null; totalTyped = 0; console.log("Timer reset...");
                     }
                     performSave = true; // Index changed, need to save
                 }
             }
 
-            // Update UI after any backspace action that occurred
+            // Update UI after any backspace action
             updateCursor();
             updateStats();
             updateBookProgress();
@@ -651,10 +614,10 @@ document.addEventListener('DOMContentLoaded', () => {
         } // End Backspace Handling
 
 
-        // --- Handle Typing / Enter / Space Key (only runs if NOT read-only) ---
+        // --- Handle Typing / Enter / Space Key ---
         let needsEnter = false;
         let precedingSpan = null;
-        if (currentTypedIndexInChunk > 0) {
+        if (currentTypedIndexInChunk > 0) { /* ... check needs-enter ... */
              precedingSpan = document.getElementById(`chunk-char-${currentTypedIndexInChunk - 1}`);
              needsEnter = precedingSpan?.classList.contains('needs-enter') ?? false;
         }
@@ -662,7 +625,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // --- Case 1: NEEDS Enter/Space ---
         if (needsEnter) {
-            if (key === 'Enter' || key === ' ') {
+            if (key === 'Enter' || key === ' ') { /* ... handle correct Enter/Space ... */
                 console.log(`Key '${key}' pressed correctly at needs-enter point after chunk index ${currentTypedIndexInChunk - 1}.`);
                 if (precedingSpan) { precedingSpan.classList.remove('incorrect', 'needs-enter'); precedingSpan.classList.add('correct'); }
                 if (!startTime && totalTyped === 0) startTime = new Date();
@@ -672,7 +635,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 updateCursor(); updateStats(); updateBookProgress(); saveProgress();
                 return;
-            } else {
+            } else { /* ... handle incorrect key ... */
                 console.log(`Incorrect key '${key}' pressed at needs-enter point.`);
                  if (precedingSpan && !precedingSpan.classList.contains('incorrect')) { errors++; precedingSpan.classList.add('incorrect'); precedingSpan.classList.remove('correct'); updateStats(); }
                  if (precedingSpan) precedingSpan.classList.add('needs-enter');
@@ -682,18 +645,19 @@ document.addEventListener('DOMContentLoaded', () => {
         // --- End Case 1 ---
 
         // --- Case 2: Regular Typing ---
-        if (key === 'Enter') { console.log("Enter ignored."); return; }
-        if (expectedChar === null) { console.log("At end of chunk, ignoring non-backspace/nav keys."); return; }
-        if (expectedChar === P_BREAK_PLACEHOLDER) { console.error(`Logic Error: Attempting to type at placeholder chunk index ${currentTypedIndexInChunk}.`); return; }
+        if (key === 'Enter') { console.log("Enter ignored."); return; } // Ignore Enter if not needed
+        if (expectedChar === null) { console.log("At end of chunk, ignoring non-backspace/nav keys."); return; } // At end of chunk
+        if (expectedChar === P_BREAK_PLACEHOLDER) { console.error(`Logic Error: Attempting to type at placeholder chunk index ${currentTypedIndexInChunk}.`); return; } // Safeguard
 
-        if (key.length === 1) {
+        if (key.length === 1) { /* ... handle regular char typing ... */
             const typedChar = key;
             const charSpan = document.getElementById(`chunk-char-${currentTypedIndexInChunk}`);
             if (!charSpan) { console.error(`Chunk span not found: index ${currentTypedIndexInChunk}`); return; }
             if (!startTime) startTime = new Date();
             let correct = false;
-            const isExpectedSpace = (expectedChar === ' ' || expectedChar === '\u00A0');
-            const isTypedSpace = (typedChar === ' ');
+            // Correctness check
+             const isExpectedSpace = (expectedChar === ' ' || expectedChar === '\u00A0');
+             const isTypedSpace = (typedChar === ' ');
              if ((isTypedSpace && isExpectedSpace) || (!isExpectedSpace && typedChar === expectedChar)) {
                  correct = true; charSpan.classList.add('correct'); charSpan.classList.remove('incorrect', 'current', 'needs-enter');
              } else {
@@ -703,7 +667,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const processedChunkIndex = currentTypedIndexInChunk;
             currentTypedIndexInChunk++;
 
-            let nextCharIsBreak = (currentTypedIndexInChunk < currentChunkText.length && currentChunkText[currentTypedIndexInChunk] === P_BREAK_PLACEHOLDER);
+            // Check for next break
+             let nextCharIsBreak = (currentTypedIndexInChunk < currentChunkText.length && currentChunkText[currentTypedIndexInChunk] === P_BREAK_PLACEHOLDER);
              if (nextCharIsBreak) {
                  console.log(`Next char at chunk index ${currentTypedIndexInChunk} is a break.`);
                  const spanToMark = document.getElementById(`chunk-char-${processedChunkIndex}`);
@@ -712,7 +677,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
             updateCursor(); updateStats(); updateBookProgress(); saveProgress();
 
-            if (currentTypedIndexInChunk >= currentChunkText.length && !nextCharIsBreak) {
+            // Check for Chunk Completion & Auto-Advance
+             if (currentTypedIndexInChunk >= currentChunkText.length && !nextCharIsBreak) {
                  console.log(`Completed chunk ${currentChunkIndex}.`);
                  if (currentChunkIndex < chapterChunks.length - 1) {
                      console.log("Auto-advancing to next chunk...");
@@ -720,6 +686,8 @@ document.addEventListener('DOMContentLoaded', () => {
                  } else {
                      console.log("Last chunk of the chapter completed.");
                      markChapterAsCompletedUI();
+                     // Optional: Auto-advance chapter
+                     // setTimeout(() => navigateChapter(1), 200);
                  }
              }
             return;
@@ -987,9 +955,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const key = PROGRESS_KEY_PREFIX + currentFilename;
         let progressData = {};
-        let existingOverallIndex = -1; // Use -1 to differentiate from unloaded state
+        let existingOverallIndex = 0; // Default to 0 if not found
 
-        // Try to load existing data first to merge
+        // Try to load existing data first to merge AND get current saved index
         try {
             const existingData = localStorage.getItem(key);
             if (existingData) {
@@ -1002,7 +970,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (e) {
             console.error("Error parsing existing progress data before saving:", e);
             progressData = {}; // Start fresh if parsing fails
-            existingOverallIndex = -1;
+            existingOverallIndex = 0; // Reset on parse error
         }
 
         // Ensure chapterProgress object exists
@@ -1010,32 +978,35 @@ document.addEventListener('DOMContentLoaded', () => {
             progressData.chapterProgress = {};
         }
 
-        // --- Calculate the NEW overall character index based on current state ---
+        // --- Calculate the potential NEW overall character index ---
         let newOverallChapterIndex = chunkStartIndexInChapter + currentTypedIndexInChunk;
 
         // Adjust if waiting for enter BEFORE the current index
         if (currentTypedIndexInChunk > 0) {
             const precedingSpan = document.getElementById(`chunk-char-${currentTypedIndexInChunk - 1}`);
             if (precedingSpan?.classList.contains('needs-enter')) {
-                // If waiting, the *actual* progress saved should be before the break
                 newOverallChapterIndex = chunkStartIndexInChapter + currentTypedIndexInChunk - 1;
+                // Log adjustment only if it happens
                 // console.log("saveProgress: Adjusting potential save index due to needs-enter state.");
             }
         }
         // --- End Calculation ---
 
-        // *** REMOVED CHECK: Always update the stored progress ***
-        // The load logic handles displaying correctly based on this saved value.
-        progressData.chapterProgress[String(currentChapterIndex)] = newOverallChapterIndex;
-
-        // Log the update (more informative)
-        if (existingOverallIndex === -1) {
-             console.log(`saveProgress: Initializing chapter ${currentChapterIndex} to overall index ${newOverallChapterIndex}`);
-        } else if (newOverallChapterIndex !== existingOverallIndex) {
-            console.log(`saveProgress: Updating chapter ${currentChapterIndex} from ${existingOverallIndex} to new overall index ${newOverallChapterIndex}`);
+        // *** CRITICAL FIX: Only update if new index is greater than OR EQUAL TO existing ***
+        // We use >= because if the user saves at the exact same spot, it's harmless and reflects current state.
+        if (newOverallChapterIndex >= existingOverallIndex) {
+            // Update the overall character index for the CURRENT chapter
+            progressData.chapterProgress[String(currentChapterIndex)] = newOverallChapterIndex;
+            // Only log if the value actually changes or is initially set
+            if (newOverallChapterIndex !== existingOverallIndex || !progressData.chapterProgress.hasOwnProperty(String(currentChapterIndex))) {
+                 console.log(`saveProgress: Updating chapter ${currentChapterIndex} from ${existingOverallIndex} to new overall index ${newOverallChapterIndex}`);
+            }
         } else {
-             // Optionally log saves even if the index didn't change
-             // console.log(`saveProgress: Re-saving chapter ${currentChapterIndex} at overall index ${newOverallChapterIndex}`);
+            // Log if we are *not* saving because the new index is smaller (due to backward nav state rendering)
+            console.log(`saveProgress: Skipping update for chapter ${currentChapterIndex}. New index ${newOverallChapterIndex} is not greater than existing ${existingOverallIndex}.`);
+            // IMPORTANT: Ensure the existing higher value remains in the object being saved if no update occurs
+            // This line might be redundant if progressData was loaded correctly, but ensures safety.
+            progressData.chapterProgress[String(currentChapterIndex)] = existingOverallIndex;
         }
 
 
@@ -1048,7 +1019,7 @@ document.addEventListener('DOMContentLoaded', () => {
              progressData.bookLengthData.chapLengths = chapterLengths;
         }
 
-        // Save the progress object
+        // Save the progress object (either updated or kept same)
         try {
             localStorage.setItem(key, JSON.stringify(progressData));
         } catch (e) {
