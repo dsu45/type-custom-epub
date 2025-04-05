@@ -68,31 +68,35 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function handleFileSelect(event) {
         const file = event.target.files[0];
-        const expectedFilename = currentFilename; // Store the potentially remembered filename
+        const expectedFilename = currentFilename; // Store potentially remembered filename
 
         // Validation...
-        if (isLoading || !file || !file.name.endsWith('.epub')) { /* ... */ return; }
+        if (isLoading || !file || !file.name.endsWith('.epub')) {
+            if (file && !file.name.endsWith('.epub')) { alert("Please select a valid .epub file."); }
+            else if (!file) { console.log("No file selected."); }
+            if (isLoading) { console.log("handleFileSelect: Aborted because isLoading is true."); }
+            try { fileInput.value = ''; } catch(e) { console.warn("Couldn't clear file input");}
+            return;
+         }
 
         const selectedFilename = file.name;
+        let chapterIndexToLoad = 0; // Default start chapter, will be updated by loadProgress
 
         // --- Check if selected file is DIFFERENT ---
         if (expectedFilename && selectedFilename !== expectedFilename) {
             console.log(`Selected file '${selectedFilename}' differs from expected '${expectedFilename}'. Resetting application state for new book.`);
-
-            // *** CHANGE: Do NOT clear the old book's progress ***
-            // clearProgress(expectedFilename); // <<<< COMMENTED OUT or DELETED
-
-            // Perform a full reset of the application's *current* state for the new book
-            resetState(true); // Resets chapter/chunk state, lengths, etc., clears in-memory filename
+            // *** Optional: Decide if you want to clear OLD progress ***
+            // clearProgress(expectedFilename); // Keep commented out to preserve old book data
+            resetState(true); // Full reset of in-memory state, clears currentFilename
             currentFilename = selectedFilename; // Set to the NEW selected filename
             console.log("handleFileSelect: State reset for new file selection.");
         } else if (!expectedFilename) {
-             // No previous file expected, just set the filename and reset typing state
+             // No previous file expected (e.g., first ever load)
              currentFilename = selectedFilename;
              resetState(false); // Basic reset (keep filename, reset typing state)
         } else {
-            // Filename matches, just do a basic reset of typing state
-            // This might happen if user re-selects the same file after page refresh
+            // Filename matches (likely re-selection after refresh)
+             console.log(`handleFileSelect: Re-selected same file '${currentFilename}'. Resetting typing state.`);
              resetState(false); // Keep filename, reset typing state
         }
         // --- End Check ---
@@ -102,41 +106,42 @@ document.addEventListener('DOMContentLoaded', () => {
         const reader = new FileReader();
 
         reader.onload = async (e) => {
-            console.log(`handleFileSelect: reader.onload started.`);
+            console.log(`handleFileSelect: reader.onload started for ${currentFilename}.`);
             const arrayBuffer = e.target.result;
             try {
-                // ... (ePub loading, spine check) ...
                 book = ePub(arrayBuffer); await book.ready; await book.spine.ready;
-                spineItems = book.spine.spineItems; if (!spineItems || spineItems.length === 0) { throw new Error("Invalid spine"); }
+                spineItems = book.spine.spineItems; if (!spineItems || spineItems.length === 0) { throw new Error("Invalid EPUB spine data"); }
                 console.log(`handleFileSelect: Spine ready for ${currentFilename}, found ${spineItems.length} items.`);
 
-                // --- Load progress FOR THE CURRENT FILE ---
-                loadProgress(); // Loads data based on currentFilename from localStorage
-                console.log(`handleFileSelect: loadProgress finished.`);
+                // --- Load progress AND determine starting chapter ---
+                // loadProgress now returns the chapter index to start on
+                chapterIndexToLoad = loadProgress(); // Reads localStorage based on currentFilename
+                console.log(`handleFileSelect: loadProgress finished. Determined chapter index to load: ${chapterIndexToLoad}`);
 
                 // --- Calculate/Use Cached Length FOR THE CURRENT FILE ---
-                if (!bookLengthCalculated) { /* ... calculate ... */
+                if (!bookLengthCalculated) {
                      console.log(`handleFileSelect: Calculating book length for ${currentFilename}...`);
                      await calculateTotalBookCharacters();
-                     console.log(`handleFileSelect: Book length calculation finished for ${currentFilename}.`);
+                     console.log(`handleFileSelect: Book length calculation finished.`);
                  }
                 else { console.log("handleFileSelect: Using cached book length data."); updateBookProgress(); }
 
-                // --- Save Preferences & Load Chapter FOR THE CURRENT FILE ---
+                // --- Save Preferences & Load Determined Chapter ---
                 localStorage.setItem(LAST_OPENED_KEY, currentFilename); // Remember this book as last opened
-                setLoadingState(false);
+                setLoadingState(false); // Set loading false *before* potentially long chapter load
 
-                // Load the appropriate starting chapter (default 0 or potentially from loadProgress if adapted)
-                console.log(`handleFileSelect: isLoading is now ${isLoading}. Calling loadChapter(${currentChapterIndex}) for initial load.`);
+                // *** Use the determined chapter index ***
+                console.log(`handleFileSelect: Calling loadChapter(${chapterIndexToLoad}) for initial load.`);
+                // Update the global state variable *before* calling loadChapter
+                currentChapterIndex = chapterIndexToLoad;
                 await loadChapter(currentChapterIndex); // Load the target chapter
 
-                console.log(`handleFileSelect: loadChapter call finished.`);
+                console.log(`handleFileSelect: loadChapter call finished for chapter ${currentChapterIndex}.`);
                 // No immediate save needed here, save happens on interaction
 
             } catch (err) { /* ... error handling ... */
                  console.error(`handleFileSelect: Error processing EPUB ${currentFilename}:`, err);
                  alert(`Could not load or parse the EPUB file: ${err.message || 'Unknown error'}`);
-                 // clearProgress(currentFilename); // Don't clear on error either? Or maybe clear corrupted? Debatable.
                  resetState(true); resetUI(); setLoadingState(false);
              }
         };
@@ -184,12 +189,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     // --- NORMALIZE Text Content ---
                     rawText = rawText
+                        .replace(/…/g, '...') // Ellipsis (U+2026)
                         .replace(/\r\n/g, '\n') // Standardize line endings
                         .replace(/ /g, ' ') // Handle non-breaking spaces
                         .replace(/(\s|^)(\d+\.\d+)\s+([A-Z])/g, `$1${P_BREAK_PLACEHOLDER}$2 $3`) // Headers
                         .replace(/\n{2,}/g, P_BREAK_PLACEHOLDER) // Double newlines
                         .replace(/\n/g, ' ') // Single newlines
-                        .replace(/—/g, '-') // Em dash
+                        .replace(/—/g, ' - ') // Em dash
                         .replace(/[“”]/g, '"') // Smart quotes
                         .replace(/[‘’]/g, "'") // Smart quotes
                         .replace(/©/g, 'c') // <<< ADDED: Replace copyright symbol
@@ -320,12 +326,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // --- NORMALIZE Text Content ---
             rawText = rawText
+                .replace(/…/g, '...') // Ellipsis (U+2026)
                 .replace(/\r\n/g, '\n') // Standardize line endings
                 .replace(/ /g, ' ') // Handle non-breaking spaces
                 .replace(/(\s|^)(\d+\.\d+)\s+([A-Z])/g, `$1${P_BREAK_PLACEHOLDER}$2 $3`) // Headers
                 .replace(/\n{2,}/g, P_BREAK_PLACEHOLDER) // Double newlines
                 .replace(/\n/g, ' ') // Single newlines
-                .replace(/—/g, '-') // Em dash
+                .replace(/—/g, ' - ') // Em dash
                 .replace(/[“”]/g, '"') // Smart quotes
                 .replace(/[‘’]/g, "'") // Smart quotes
                 .replace(/©/g, 'c') // Copyright symbol
@@ -720,63 +727,64 @@ document.addEventListener('DOMContentLoaded', () => {
         const previousChar = sourceTextArea.querySelector('span.current');
         if (previousChar) previousChar.classList.remove('current');
 
-        // 2. Determine the target index for the cursor (always the current typing index)
+        // 2. Determine the target index for the cursor
         const targetIndexInChunk = currentTypedIndexInChunk;
 
-        // 3. Check if the target index is within the bounds of the current chunk's text
+        // 3. Check if the target index is within the bounds
         if (currentChunkText && targetIndexInChunk < currentChunkText.length) {
-
-            // Find the span corresponding to the target index
             const targetSpan = document.getElementById(`chunk-char-${targetIndexInChunk}`);
 
             if (targetSpan) {
-                // 4. Add the 'current' class to the target span
+                // 4. Add the 'current' class
                 targetSpan.classList.add('current');
-                // console.log(`updateCursor: Set current class on chunk index ${targetIndexInChunk}`);
 
-                // 5. Center Scrolling Logic
+                // 5. --- PROACTIVE Scrolling Logic ---
                 try {
-                    const spanRect = targetSpan.getBoundingClientRect();
                     const areaRect = textDisplayArea.getBoundingClientRect();
-                    // Check if span is fully or partially outside the visible area vertically
-                    if (spanRect.top < areaRect.top || spanRect.bottom > areaRect.bottom) {
-                        const spanTop = targetSpan.offsetTop;
-                        const areaHeight = textDisplayArea.clientHeight;
+                    const spanRect = targetSpan.getBoundingClientRect();
+                    const areaHeight = textDisplayArea.clientHeight; // Use clientHeight for visible area
+
+                    // Define scroll trigger zones (e.g., top/bottom 30% of the area)
+                    const scrollThresholdRatio = 0.45; // Adjust this (0.25 = quarter, 0.33 = third)
+                    const topThreshold = areaRect.top + (areaHeight * scrollThresholdRatio);
+                    const bottomThreshold = areaRect.bottom - (areaHeight * scrollThresholdRatio);
+
+                    // Check if the span's TOP is above the top threshold OR
+                    // Check if the span's BOTTOM is below the bottom threshold
+                    if (spanRect.top < topThreshold || spanRect.bottom > bottomThreshold) {
                         // Calculate target scroll position to center the span
-                        const targetScrollTop = spanTop - (areaHeight / 2) + (spanRect.height / 2);
-                        // Scroll smoothly to the target position, ensuring it's not negative
+                        // Use offsetTop relative to the scroll container (textDisplayArea)
+                        const spanTopOffset = targetSpan.offsetTop;
+                        const targetScrollTop = spanTopOffset - (areaHeight / 2) + (targetSpan.offsetHeight / 2);
+
+                        // Scroll smoothly
                         textDisplayArea.scrollTo({ top: Math.max(0, targetScrollTop), behavior: 'smooth' });
+                         console.log(`updateCursor: Scrolling to center span ${targetIndexInChunk}`); // Log scroll action
                     }
                 } catch (e) {
-                    console.warn("Center scrolling failed:", e);
-                    // Basic fallback: scroll the element into view if error occurs
+                    console.warn("Proactive center scrolling failed:", e);
+                    // Basic fallback
                     try { targetSpan.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch {}
                 }
+                // --- End Scrolling Logic ---
 
             } else {
-                // This case should ideally not happen if index is < length
-                console.warn(`updateCursor: Chunk span not found for index ${targetIndexInChunk}, though index is within bounds.`);
+                console.warn(`updateCursor: Chunk span not found for index ${targetIndexInChunk}.`);
             }
         } else if (currentChunkText) {
-            // 6. Handle end of chunk text (index >= length)
+            // 6. Handle end of chunk text
             console.log("updateCursor: Index is at or beyond end of chunk text.");
-            // Check if the *last* character visually needs the enter cue (means we are waiting)
             if (targetIndexInChunk > 0) {
                 const lastCharSpan = document.getElementById(`chunk-char-${targetIndexInChunk - 1}`);
                  if(lastCharSpan?.classList.contains('needs-enter')) {
-                      // If waiting for enter on the last char, keep cursor on it
-                      lastCharSpan.classList.add('current');
-                      console.log(`updateCursor: At end, keeping cursor on last char (needs-enter) index ${targetIndexInChunk - 1}`);
-                      // Ensure it's scrolled into view
+                      lastCharSpan.classList.add('current'); // Keep cursor on last char if needs enter
                       try { lastCharSpan.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } catch {}
-                      return; // Don't scroll to bottom yet
+                      return;
                  }
             }
-            // If truly finished (not waiting for enter at the end), scroll to bottom
+            // Scroll to bottom if truly finished
             textDisplayArea.scrollTop = textDisplayArea.scrollHeight;
-        }
-        // Handle case where currentChunkText might be null/empty initially
-        else {
+        } else {
              console.log("updateCursor: No chunk text available.");
         }
     }
@@ -1028,72 +1036,97 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function loadProgress() {
-        // Reset state vars related to progress cache before loading
+        // Reset state vars related to the book being loaded
         totalBookCharacters = 0;
         chapterLengths = [];
-        bookLengthCalculated = false; // Assume not loaded initially
-        // Clear any previously loaded global chapter progress map if needed
-        // (We'll load it fresh below if available)
-        window.currentBookChapterProgress = {}; // Use a distinct global/window object
+        bookLengthCalculated = false;
+        window.currentBookChapterProgress = {}; // Reset in-memory map for safety
+        let lastChapterIndex = 0; // Default starting chapter if no progress found
+        let maxOverallIndex = -1; // Track the highest saved index to find the last point
 
-        // Ensure filename and spine are ready
+        // Ensure filename and spine are ready for THIS book
         if (!currentFilename || !spineItems || spineItems.length === 0) {
-            console.log("loadProgress SKIPPED: No filename or spineItems not ready.");
-            return;
+            console.log("loadProgress: Skipped - No filename or spineItems not ready.");
+            return lastChapterIndex; // Return default chapter 0
         }
 
         const key = PROGRESS_KEY_PREFIX + currentFilename;
         const savedData = localStorage.getItem(key);
-        console.log(`loadProgress: Attempting to load book data for key: ${key}`);
+        console.log(`loadProgress [${currentFilename}]: Attempting to load book data for key: ${key}`);
 
         if (savedData) {
             try {
                 const progressData = JSON.parse(savedData);
-                console.log(`loadProgress: Found saved data:`, progressData);
+                console.log(`loadProgress [${currentFilename}]: Found saved data:`, progressData);
 
-                // --- Validate and load cached book length data ---
+                // Load cached book length data for THIS book
                 if (progressData.bookLengthData &&
                     typeof progressData.bookLengthData.totalChars === 'number' &&
-                    progressData.bookLengthData.totalChars >= 0 && // Allow 0 total chars
+                    progressData.bookLengthData.totalChars >= 0 &&
                     Array.isArray(progressData.bookLengthData.chapLengths) &&
                     progressData.bookLengthData.chapLengths.length === spineItems.length)
                 {
                     totalBookCharacters = progressData.bookLengthData.totalChars;
                     chapterLengths = progressData.bookLengthData.chapLengths;
-                    bookLengthCalculated = true; // Mark as loaded from cache
-                    console.log(`loadProgress: Cached book length loaded: ${totalBookCharacters} chars, ${chapterLengths.length} chapters.`);
+                    bookLengthCalculated = true;
+                    console.log(`loadProgress [${currentFilename}]: Cached book length loaded: ${totalBookCharacters} chars, ${chapterLengths.length} chapters.`);
                 } else {
-                     console.log("loadProgress: Cached book length data not found or invalid.");
-                     bookLengthCalculated = false; // Ensure flag is false if data is bad
+                     console.log(`loadProgress [${currentFilename}]: Cached book length data not found/invalid.`);
+                     bookLengthCalculated = false;
                 }
 
-                // --- Load chapter progress map ---
+                // Load chapter progress map AND find the last chapter worked on
                 if (progressData.chapterProgress && typeof progressData.chapterProgress === 'object') {
-                    window.currentBookChapterProgress = progressData.chapterProgress;
-                    console.log(`loadProgress: Loaded chapter progress map:`, window.currentBookChapterProgress);
+                    window.currentBookChapterProgress = progressData.chapterProgress; // Store map in memory
+                    console.log(`loadProgress [${currentFilename}]: Loaded chapter progress map into memory.`);
+
+                    // --- Find the chapter with the highest saved index ---
+                    for (const chapIdxStr in progressData.chapterProgress) {
+                         // Ensure it's a direct property and not from prototype chain
+                         if (Object.prototype.hasOwnProperty.call(progressData.chapterProgress, chapIdxStr)) {
+                            const chapIdx = parseInt(chapIdxStr, 10);
+                            const overallIndex = progressData.chapterProgress[chapIdxStr];
+
+                            // Check if this index is valid and higher than current max
+                            if (!isNaN(chapIdx) && typeof overallIndex === 'number' && overallIndex >= 0) { // Check index >= 0
+                                 // Ensure chapter index is within the bounds of the currently loaded spine
+                                 if (chapIdx >= 0 && chapIdx < spineItems.length) {
+                                     // Use >= to handle multiple chapters saved at index 0 correctly
+                                     if (overallIndex >= maxOverallIndex) {
+                                         // If indices are equal, prefer the higher chapter number
+                                         if (overallIndex > maxOverallIndex || chapIdx > lastChapterIndex) {
+                                             maxOverallIndex = overallIndex;
+                                             lastChapterIndex = chapIdx;
+                                         }
+                                     }
+                                 } else {
+                                      console.warn(`loadProgress: Found saved progress for chapter ${chapIdx} which is outside the current spine bounds (0-${spineItems.length - 1}). Ignoring.`);
+                                 }
+                            }
+                         }
+                    }
+                    console.log(`loadProgress: Determined last worked-on chapter index: ${lastChapterIndex} (with overall index ${maxOverallIndex})`);
+                    // --- End Find Last Chapter ---
                 } else {
-                    console.log("loadProgress: No chapter progress map found in saved data.");
-                    window.currentBookChapterProgress = {}; // Initialize empty map
+                    console.log(`loadProgress [${currentFilename}]: No chapter progress map found.`);
+                    window.currentBookChapterProgress = {};
                 }
 
             } catch (e) {
-                console.error("loadProgress: Error parsing saved progress:", e);
-                // Reset everything if parsing fails
-                totalBookCharacters = 0;
-                chapterLengths = [];
-                bookLengthCalculated = false;
-                window.currentBookChapterProgress = {};
-                // Optionally clear corrupted data?
-                // clearProgress();
+                console.error(`loadProgress [${currentFilename}]: Error parsing saved progress:`, e);
+                totalBookCharacters = 0; chapterLengths = []; bookLengthCalculated = false; window.currentBookChapterProgress = {};
+                lastChapterIndex = 0; // Reset to default on error
             }
         } else {
-            console.log(`loadProgress: No saved progress found for ${currentFilename}. Starting fresh.`);
-            // Ensure state is default if no progress found
+            console.log(`loadProgress [${currentFilename}]: No saved progress found. Starting fresh.`);
             bookLengthCalculated = false;
             window.currentBookChapterProgress = {};
+            lastChapterIndex = 0; // Default for fresh start
         }
-         // Do NOT set global currentChapterIndex or initialCharIndexToLoad here.
-         // updateNavigation/BookProgress are called later
+
+        // Return the determined starting chapter index
+        console.log(`loadProgress: Returning chapter index to load: ${lastChapterIndex}`);
+        return lastChapterIndex;
     }
 
 
